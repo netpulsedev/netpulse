@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
+import type { MetricSnapshot } from '../store/networkStore';
 
 export function useExport() {
-  const exportCSV = useCallback((history: any[]) => {
+  const exportCSV = useCallback((history: MetricSnapshot[]) => {
     const header = 'Timestamp,Download (Mbps),Upload (Mbps),Ping (ms),Jitter (ms),Packet Loss (%),Stability\n';
     const rows = history.map((h) =>
       `${new Date(h.ts).toISOString()},${h.download.toFixed(2)},${h.upload.toFixed(2)},${h.ping},${h.jitter.toFixed(2)},${h.packetLoss},${h.stability}`
@@ -47,4 +48,20 @@ export function useFullscreen() {
   }, [isFullscreen, enter, exit]);
 
   return { isFullscreen, enter, exit, toggle };
+}
+
+export function useElapsedTime(startTime: number | null, active: boolean) {
+  const [now, setNow] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!active || !startTime) {
+      return;
+    }
+
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [active, startTime]);
+
+  if (!active || !startTime) return 0;
+  return Math.max(0, (now ?? startTime) - startTime);
 }

@@ -1,4 +1,5 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
+import type { ReactNode } from 'react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, LineChart, Line, ReferenceLine,
@@ -7,11 +8,24 @@ import { motion } from 'framer-motion';
 import { useNetworkStore } from '../../store/networkStore';
 
 // ─── Custom Tooltip ───────────────────────────────────────────────────────────
-function CustomTooltip({ active, payload, label, unit }: any) {
+interface TooltipPayloadItem {
+  color?: string;
+  dataKey?: string | number;
+  name?: string | number;
+  value?: string | number;
+}
+
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: TooltipPayloadItem[];
+  unit: string;
+}
+
+function CustomTooltip({ active, payload, unit }: CustomTooltipProps) {
   if (!active || !payload?.length) return null;
   return (
     <div className="glass-card px-3 py-2 text-xs border-none" style={{ border: '1px solid rgba(255,255,255,0.1)' }}>
-      {payload.map((p: any) => (
+      {payload.map((p) => (
         <div key={p.dataKey} style={{ color: p.color }} className="font-semibold">
           {p.name}: {typeof p.value === 'number' ? p.value.toFixed(2) : p.value}{unit}
         </div>
@@ -23,7 +37,7 @@ function CustomTooltip({ active, payload, label, unit }: any) {
 // ─── Chart Panel Wrapper ──────────────────────────────────────────────────────
 function ChartPanel({ title, children, accentColor = '#00E5FF', id }: {
   title: string;
-  children: React.ReactNode;
+  children: ReactNode;
   accentColor?: string;
   id: string;
 }) {

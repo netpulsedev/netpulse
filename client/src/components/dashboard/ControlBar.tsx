@@ -1,9 +1,8 @@
-import React from 'react';
 import { motion } from 'framer-motion';
 import { Play, Square, Maximize2, Download, Moon } from 'lucide-react';
 import { useNetworkStore } from '../../store/networkStore';
 import { useDiagnostics } from '../../hooks/useDiagnostics';
-import { useExport, useFullscreen } from '../../hooks/useUtils';
+import { useElapsedTime, useExport, useFullscreen } from '../../hooks/useUtils';
 import { formatDuration } from '../../utils/stability';
 
 interface ControlBarProps {
@@ -24,8 +23,7 @@ export function ControlBar({ onAlignmentMode }: ControlBarProps) {
   const { exportCSV } = useExport();
   const { toggle: toggleFullscreen } = useFullscreen();
 
-  const now = Date.now();
-  const duration = sessionStart ? now - sessionStart : 0;
+  const duration = useElapsedTime(sessionStart, isMonitoring);
 
   return (
     <div className="glass-card px-5 py-4 flex flex-wrap items-center gap-3 md:gap-4">

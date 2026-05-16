@@ -1,16 +1,17 @@
-import React from 'react';
+import type { ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import { useNetworkStore } from '../../store/networkStore';
 import {
-  formatMbps, formatMs, formatDuration, getQualityColor, getQualityLabel,
+  formatDuration, getQualityColor, getQualityLabel,
 } from '../../utils/stability';
 import { Clock, TrendingUp, TrendingDown, Zap, Award, BarChart2 } from 'lucide-react';
+import { useElapsedTime } from '../../hooks/useUtils';
 
 function StatBlock({ label, value, unit, icon, color }: {
   label: string;
   value: string | number;
   unit?: string;
-  icon: React.ReactNode;
+  icon: ReactNode;
   color: string;
 }) {
   return (
@@ -34,8 +35,7 @@ function StatBlock({ label, value, unit, icon, color }: {
 
 export function SessionSummary() {
   const { analytics, sessionStart, isMonitoring } = useNetworkStore();
-  const now = Date.now();
-  const duration = sessionStart ? now - sessionStart : 0;
+  const duration = useElapsedTime(sessionStart, isMonitoring);
   const avgStability = isFinite(analytics.avgStability) ? Math.round(analytics.avgStability) : 0;
   const qualityColor = getQualityColor(avgStability);
 

@@ -25,7 +25,6 @@ const PING_EXCELLENT = 10;       // ms
 const PING_TERRIBLE = 300;
 const JITTER_EXCELLENT = 2;      // ms
 const JITTER_TERRIBLE = 100;
-const PACKET_LOSS_NONE = 0;      // %
 const PACKET_LOSS_TERRIBLE = 5;
 
 function clamp(v: number, min: number, max: number) {
