@@ -79,11 +79,10 @@ Export session data using:
 * Recharts
 * Zustand
 
-## Backend
+## Architecture
 
-* Node.js
-* Express
-* Socket.IO
+* 100% Client-side application
+* Uses Cloudflare's public Speed Test API for measurements
 
 ---
 
@@ -136,20 +135,10 @@ cd netpulse
 
 ---
 
-## Frontend Setup
+## Local Development
 
 ```bash
 cd client
-npm install
-npm run dev
-```
-
----
-
-## Backend Setup
-
-```bash
-cd server
 npm install
 npm run dev
 ```
@@ -161,7 +150,6 @@ npm run dev
 ```txt
 netpulse/
 ├── client/
-├── server/
 └── README.md
 ```
 
