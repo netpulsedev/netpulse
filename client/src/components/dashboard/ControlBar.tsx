@@ -50,11 +50,11 @@ export function ControlBar({ onAlignmentMode }: ControlBarProps) {
       </div>
 
       {/* Action buttons */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-4">
         {/* Start/Stop */}
         <motion.button
           id="btn-toggle-monitor"
-          className={`btn-primary flex items-center gap-2 px-4 py-2 text-sm font-bold`}
+          className={`btn-primary flex items-center gap-2 px-6 py-2.5 text-sm font-bold`}
           style={
             isMonitoring
               ? { background: 'linear-gradient(135deg, #FF1744, #D50000)', color: '#fff' }
@@ -71,7 +71,7 @@ export function ControlBar({ onAlignmentMode }: ControlBarProps) {
         {/* Alignment mode */}
         <motion.button
           id="btn-alignment-mode"
-          className="btn-secondary flex items-center gap-2 px-4 py-2 text-sm"
+          className="btn-secondary flex items-center gap-2 px-6 py-2.5 text-sm"
           whileTap={{ scale: 0.96 }}
           onClick={onAlignmentMode}
           disabled={!isMonitoring}
@@ -85,7 +85,7 @@ export function ControlBar({ onAlignmentMode }: ControlBarProps) {
         {/* Export CSV */}
         <motion.button
           id="btn-export-csv"
-          className="btn-secondary flex items-center gap-2 px-3 py-2 text-sm"
+          className="btn-secondary flex items-center gap-2 px-5 py-2.5 text-sm"
           whileTap={{ scale: 0.96 }}
           onClick={() => exportCSV(history)}
           disabled={history.length === 0}
@@ -100,7 +100,7 @@ export function ControlBar({ onAlignmentMode }: ControlBarProps) {
         {/* Fullscreen */}
         <motion.button
           id="btn-fullscreen"
-          className="btn-secondary px-3 py-2"
+          className="btn-secondary px-4 py-2.5"
           whileTap={{ scale: 0.96 }}
           onClick={() => toggleFullscreen()}
           aria-label="Toggle fullscreen"

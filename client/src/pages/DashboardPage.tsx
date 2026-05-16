@@ -66,7 +66,7 @@ export default function DashboardPage() {
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <header className="relative z-10 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-        <div className="max-w-screen-2xl mx-auto px-4 md:px-6 h-13 flex items-center gap-3" style={{ height: '52px' }}>
+        <div className="max-w-screen-2xl mx-auto px-4 md:px-6 h-13 flex items-center gap-6" style={{ height: '52px' }}>
 
           {/* Back */}
           <button
@@ -100,7 +100,7 @@ export default function DashboardPage() {
           <div className="flex-1" />
 
           {/* Status row */}
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-4 flex-shrink-0">
             <QualityBadge />
             <SessionTimer />
 

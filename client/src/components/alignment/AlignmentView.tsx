@@ -121,7 +121,7 @@ export function AlignmentView({ onClose }: AlignmentViewProps) {
             <span
               className="metric-value font-black leading-none"
               style={{
-                fontSize: 'clamp(7rem, 20vw, 14rem)',
+                fontSize: 'clamp(5rem, 15vw, 10rem)',
                 color: qualityColor,
                 textShadow: `0 0 60px ${qualityColor}80, 0 0 120px ${qualityColor}30`,
               }}
@@ -158,7 +158,7 @@ export function AlignmentView({ onClose }: AlignmentViewProps) {
             <ArrowDown size={28} color="#00E5FF" />
             <span
               className="metric-value font-black"
-              style={{ fontSize: 'clamp(2.5rem, 7vw, 5rem)', color: '#00E5FF', textShadow: '0 0 30px #00E5FF60' }}
+              style={{ fontSize: 'clamp(2rem, 5vw, 4rem)', color: '#00E5FF', textShadow: '0 0 30px #00E5FF60' }}
             >
               {download > 0 ? download.toFixed(0) : '—'}
             </span>
@@ -176,7 +176,7 @@ export function AlignmentView({ onClose }: AlignmentViewProps) {
             <ArrowUp size={28} color="#7C4DFF" />
             <span
               className="metric-value font-black"
-              style={{ fontSize: 'clamp(2.5rem, 7vw, 5rem)', color: '#7C4DFF', textShadow: '0 0 30px #7C4DFF60' }}
+              style={{ fontSize: 'clamp(2rem, 5vw, 4rem)', color: '#7C4DFF', textShadow: '0 0 30px #7C4DFF60' }}
             >
               {upload > 0 ? upload.toFixed(0) : '—'}
             </span>
@@ -206,8 +206,8 @@ export function AlignmentView({ onClose }: AlignmentViewProps) {
 
         {/* Hint */}
         <p
-          className="absolute bottom-8 text-xs uppercase tracking-widest"
-          style={{ color: 'rgba(240,244,255,0.2)' }}
+          className="absolute bottom-8 text-xs uppercase tracking-widest px-4 py-2 rounded-full"
+          style={{ color: 'rgba(240,244,255,0.8)', background: 'rgba(5,8,22,0.6)', backdropFilter: 'blur(8px)', zIndex: 10, textAlign: 'center' }}
         >
           Move around to find the best signal · Press Esc to exit
         </p>

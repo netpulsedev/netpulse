@@ -138,7 +138,7 @@ export function useDiagnostics() {
     socketService.onSession((id) => setSessionId(id));
 
     socketService.onConnect(() => {
-      socketService.startHeartbeat(1000);
+      socketService.startHeartbeat(250);
     });
 
     socketService.onDisconnect((unexpected) => {
