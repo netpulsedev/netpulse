@@ -4,7 +4,7 @@
  * Adaptive test sizes keep buffer bloat minimal.
  */
 
-const API_BASE = '/api';
+const API_BASE = 'https://speed.cloudflare.com';
 
 interface ThroughputResult {
   mbps: number;
@@ -18,7 +18,7 @@ interface ThroughputResult {
 export async function measureDownload(sizeBytes = 512 * 1024, onProgress?: (mbps: number) => void): Promise<ThroughputResult> {
   const start = performance.now();
   try {
-    const res = await fetch(`${API_BASE}/download?size=${sizeBytes}&t=${Date.now()}`, {
+    const res = await fetch(`${API_BASE}/__down?bytes=${sizeBytes}&t=${Date.now()}`, {
       cache: 'no-store',
       signal: AbortSignal.timeout(15000),
     });
@@ -67,7 +67,7 @@ export async function measureUpload(sizeBytes = 256 * 1024, onProgress?: (mbps: 
       formData.append('data', blob, 'payload.bin');
 
       const xhr = new XMLHttpRequest();
-      xhr.open('POST', `${API_BASE}/upload`, true);
+      xhr.open('POST', `${API_BASE}/__up`, true);
 
       let lastCallbackTime = start;
 
@@ -110,7 +110,7 @@ export async function measureUpload(sizeBytes = 256 * 1024, onProgress?: (mbps: 
 export async function httpPing(): Promise<number> {
   try {
     const start = performance.now();
-    await fetch(`${API_BASE}/ping?t=${Date.now()}`, {
+    await fetch(`${API_BASE}/__down?bytes=0&t=${Date.now()}`, {
       cache: 'no-store',
       signal: AbortSignal.timeout(3000),
     });
