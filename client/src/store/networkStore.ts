@@ -77,7 +77,7 @@ const defaultAnalytics = {
 };
 
 export const useNetworkStore = create<NetworkState>()(
-  subscribeWithSelector((set, get) => ({
+  subscribeWithSelector((set) => ({
     download: 0,
     upload: 0,
     ping: 0,

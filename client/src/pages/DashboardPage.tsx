@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Activity, Cpu, Radio } from 'lucide-react';
+import { ArrowLeft, Activity, Radio } from 'lucide-react';
 import { MetricsGrid } from '../components/metrics/MetricsGrid';
 import { ThroughputChart, PingChart, StabilityChart } from '../components/charts/Charts';
 import { SessionSummary } from '../components/dashboard/SessionSummary';
@@ -9,17 +9,12 @@ import { ControlBar } from '../components/dashboard/ControlBar';
 import { AlignmentView } from '../components/alignment/AlignmentView';
 import { useNetworkStore } from '../store/networkStore';
 import { getQualityColor, getQualityLabel, formatDuration } from '../utils/stability';
+import { useElapsedTime } from '../hooks/useUtils';
 
 // ─── Session Timer ────────────────────────────────────────────────────────────
 function SessionTimer() {
   const { sessionStart, isMonitoring } = useNetworkStore();
-  const [elapsed, setElapsed] = useState(0);
-
-  useEffect(() => {
-    if (!isMonitoring || !sessionStart) { setElapsed(0); return; }
-    const iv = setInterval(() => setElapsed(Date.now() - sessionStart), 1000);
-    return () => clearInterval(iv);
-  }, [isMonitoring, sessionStart]);
+  const elapsed = useElapsedTime(sessionStart, isMonitoring);
 
   if (!isMonitoring) return null;
 

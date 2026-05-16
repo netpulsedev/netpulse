@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import type { ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowDown, ArrowUp, Activity, Zap, Wifi, Shield } from 'lucide-react';
 import { useNetworkStore } from '../../store/networkStore';
@@ -9,16 +9,12 @@ interface MetricCardProps {
   label: string;
   value: string | number;
   unit?: string;
-  icon: React.ReactNode;
+  icon: ReactNode;
   color: string;
   subtext?: string;
 }
 
 function MetricCard({ id, label, value, unit, icon, color, subtext }: MetricCardProps) {
-  const prevRef = useRef(value);
-  const changed = prevRef.current !== value;
-  useEffect(() => { prevRef.current = value; }, [value]);
-
   return (
     <motion.div
       id={id}
@@ -67,7 +63,7 @@ function MetricCard({ id, label, value, unit, icon, color, subtext }: MetricCard
               color,
               textShadow: `0 0 20px ${color}50`,
             }}
-            initial={changed ? { opacity: 0, y: 6 } : false}
+            initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -6 }}
             transition={{ duration: 0.15 }}

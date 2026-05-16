@@ -10,16 +10,21 @@ const path = require('path');
 const app = express();
 const server = http.createServer(app);
 
+const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173,http://localhost:3000')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 const io = new Server(server, {
   cors: {
-    origin: ['http://localhost:5173', 'http://localhost:3000'],
+    origin: allowedOrigins,
     methods: ['GET', 'POST'],
   },
   pingInterval: 2000,
   pingTimeout: 5000,
 });
 
-app.use(cors({ origin: ['http://localhost:5173', 'http://localhost:3000'] }));
+app.use(cors({ origin: allowedOrigins }));
 app.use(compression());
 app.use(express.json());
 
@@ -30,11 +35,52 @@ const upload = multer({
 
 // ─── Session Store ───────────────────────────────────────────────────────────
 const sessions = new Map();
+const SESSION_TTL_MS = Number(process.env.SESSION_TTL_MS) || 6 * 60 * 60 * 1000; // 6 hours
+const MAX_SESSIONS = Number(process.env.MAX_SESSIONS) || 500;
+
+function pruneSessions() {
+  const now = Date.now();
+
+  for (const [id, session] of sessions) {
+    const endedAt = session.disconnectedAt;
+    if (endedAt && now - endedAt > SESSION_TTL_MS) {
+      sessions.delete(id);
+    }
+  }
+
+  while (sessions.size > MAX_SESSIONS) {
+    const oldestId = sessions.keys().next().value;
+    if (!oldestId) break;
+    sessions.delete(oldestId);
+  }
+}
+
+setInterval(pruneSessions, 5 * 60 * 1000).unref();
+
+function finiteNumber(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function sanitizeMetricSnapshot(data) {
+  const source = data && typeof data === 'object' ? data : {};
+  return {
+    clientTs: finiteNumber(source.ts, Date.now()),
+    download: Math.max(0, finiteNumber(source.download)),
+    upload: Math.max(0, finiteNumber(source.upload)),
+    ping: Math.max(0, finiteNumber(source.ping)),
+    jitter: Math.max(0, finiteNumber(source.jitter)),
+    packetLoss: Math.max(0, Math.min(100, finiteNumber(source.packetLoss))),
+    stability: Math.max(0, Math.min(100, finiteNumber(source.stability))),
+    ts: Date.now(),
+  };
+}
 
 // ─── Random Data Endpoint (Download Test) ────────────────────────────────────
 app.get('/api/download', (req, res) => {
-  const size = parseInt(req.query.size) || 1024 * 1024; // default 1MB
-  const safeSize = Math.min(size, 20 * 1024 * 1024); // cap at 20MB
+  const requestedSize = Number.parseInt(req.query.size, 10);
+  const size = Number.isFinite(requestedSize) ? requestedSize : 1024 * 1024; // default 1MB
+  const safeSize = Math.max(1, Math.min(size, 20 * 1024 * 1024)); // cap at 20MB
 
   res.setHeader('Content-Type', 'application/octet-stream');
   res.setHeader('Content-Length', safeSize);
@@ -98,6 +144,7 @@ io.on('connection', (socket) => {
     socketId: socket.id,
   };
   sessions.set(sessionId, session);
+  pruneSessions();
 
   socket.emit('session:init', { sessionId, serverTime: Date.now() });
 
@@ -114,7 +161,10 @@ io.on('connection', (socket) => {
     if (session.metrics.length > 3600) {
       session.metrics.shift(); // Rolling 1hr window
     }
-    session.metrics.push({ ...data, ts: Date.now() });
+
+    const snapshot = sanitizeMetricSnapshot(data);
+    session.metrics.push(snapshot);
+    session.latestMetric = snapshot;
   });
 
   socket.on('disconnect', (reason) => {
