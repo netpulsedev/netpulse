@@ -15,7 +15,7 @@ interface ThroughputResult {
 /**
  * Download test — streams a known-size payload and measures time.
  */
-export async function measureDownload(sizeBytes = 512 * 1024): Promise<ThroughputResult> {
+export async function measureDownload(sizeBytes = 512 * 1024, onProgress?: (mbps: number) => void): Promise<ThroughputResult> {
   const start = performance.now();
   try {
     const res = await fetch(`${API_BASE}/download?size=${sizeBytes}&t=${Date.now()}`, {
@@ -28,12 +28,20 @@ export async function measureDownload(sizeBytes = 512 * 1024): Promise<Throughpu
     }
 
     const reader = res.body.getReader();
-    let totalBytes = 0;
+    let lastCallbackTime = start;
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
       totalBytes += value?.length ?? 0;
+      
+      const now = performance.now();
+      if (now - lastCallbackTime > 100) {
+        const duration = now - start;
+        const mbps = (totalBytes * 8) / (duration / 1000) / 1_000_000;
+        onProgress?.(mbps);
+        lastCallbackTime = now;
+      }
     }
 
     const durationMs = performance.now() - start;
@@ -48,30 +56,52 @@ export async function measureDownload(sizeBytes = 512 * 1024): Promise<Throughpu
 /**
  * Upload test — sends a random blob and measures throughput.
  */
-export async function measureUpload(sizeBytes = 256 * 1024): Promise<ThroughputResult> {
+export async function measureUpload(sizeBytes = 256 * 1024, onProgress?: (mbps: number) => void): Promise<ThroughputResult> {
   const start = performance.now();
-  try {
-    const data = new Uint8Array(sizeBytes);
-    crypto.getRandomValues(data.subarray(0, Math.min(sizeBytes, 65536)));
-    const blob = new Blob([data]);
-    const formData = new FormData();
-    formData.append('data', blob, 'payload.bin');
+  return new Promise((resolve, reject) => {
+    try {
+      const data = new Uint8Array(sizeBytes);
+      crypto.getRandomValues(data.subarray(0, Math.min(sizeBytes, 65536)));
+      const blob = new Blob([data]);
+      const formData = new FormData();
+      formData.append('data', blob, 'payload.bin');
 
-    const res = await fetch(`${API_BASE}/upload`, {
-      method: 'POST',
-      body: formData,
-      signal: AbortSignal.timeout(15000),
-    });
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', `${API_BASE}/upload`, true);
 
-    if (!res.ok) throw new Error('Upload endpoint unavailable');
+      let lastCallbackTime = start;
 
-    const durationMs = performance.now() - start;
-    const mbps = (sizeBytes * 8) / (durationMs / 1000) / 1_000_000;
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          const now = performance.now();
+          if (now - lastCallbackTime > 100) {
+            const duration = now - start;
+            const mbps = (e.loaded * 8) / (duration / 1000) / 1_000_000;
+            onProgress?.(mbps);
+            lastCallbackTime = now;
+          }
+        }
+      };
 
-    return { mbps: Math.max(0, mbps), durationMs, bytes: sizeBytes };
-  } catch {
-    return { mbps: 0, durationMs: 0, bytes: 0 };
-  }
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          const durationMs = performance.now() - start;
+          const mbps = (sizeBytes * 8) / (durationMs / 1000) / 1_000_000;
+          resolve({ mbps: Math.max(0, mbps), durationMs, bytes: sizeBytes });
+        } else {
+          resolve({ mbps: 0, durationMs: 0, bytes: 0 });
+        }
+      };
+
+      xhr.onerror = () => resolve({ mbps: 0, durationMs: 0, bytes: 0 });
+      xhr.timeout = 15000;
+      xhr.ontimeout = () => resolve({ mbps: 0, durationMs: 0, bytes: 0 });
+
+      xhr.send(formData);
+    } catch {
+      resolve({ mbps: 0, durationMs: 0, bytes: 0 });
+    }
+  });
 }
 
 /**

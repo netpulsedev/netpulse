@@ -27,8 +27,6 @@ export function useDiagnostics() {
   } = store;
 
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
-  const lightIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const heavyIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const packetLossRef = useRef(0);
   const totalHeartbeatsRef = useRef(0);
   const missedHeartbeatsRef = useRef(0);
@@ -68,30 +66,42 @@ export function useDiagnostics() {
     }
   }, [setNetworkInfo]);
 
-  // ── Throughput Measurement ──────────────────────────────────────────────────
-  const runLightThroughput = useCallback(async () => {
-    if (!isRunningRef.current || throughputInFlightRef.current) return;
+  const runContinuousThroughput = useCallback(async () => {
+    while (isRunningRef.current) {
+      if (throughputInFlightRef.current) {
+        await new Promise(r => setTimeout(r, 500));
+        continue;
+      }
+      
+      throughputInFlightRef.current = true;
+      try {
+        const { download: lastDl, upload: lastUl } = useNetworkStore.getState();
 
-    throughputInFlightRef.current = true;
-    try {
-      const { download: lastDl, upload: lastUl } = useNetworkStore.getState();
+        setPhase('download');
+        const dlSize = adaptiveDownloadSize(lastDl) * 2; // Increase target duration for continuous mode
+        const dl = await measureDownload(dlSize, (mbps) => {
+          setMetrics({ download: mbps });
+        });
 
-      setPhase('download');
-      const dlSize = adaptiveDownloadSize(lastDl);
-      const dl = await measureDownload(dlSize);
+        if (!isRunningRef.current) break;
+        setMetrics({ download: dl.mbps });
 
-      if (!isRunningRef.current) return;
+        setPhase('upload');
+        const ulSize = adaptiveUploadSize(lastUl) * 2;
+        const ul = await measureUpload(ulSize, (mbps) => {
+          setMetrics({ upload: mbps });
+        });
 
-      setPhase('upload');
-      const ulSize = adaptiveUploadSize(lastUl);
-      const ul = await measureUpload(ulSize);
+        if (!isRunningRef.current) break;
+        setMetrics({ upload: ul.mbps });
+        setPhase('analyzing');
 
-      if (!isRunningRef.current) return;
-
-      setPhase('analyzing');
-      setMetrics({ download: dl.mbps, upload: ul.mbps });
-    } finally {
-      throughputInFlightRef.current = false;
+      } finally {
+        throughputInFlightRef.current = false;
+      }
+      
+      // Short breather to allow ping/heartbeats to measure idle latency
+      await new Promise(r => setTimeout(r, 500));
     }
   }, [setMetrics, setPhase]);
 
@@ -166,49 +176,17 @@ export function useDiagnostics() {
     // Connect after handlers are registered so fast connections cannot miss setup.
     socketService.connect();
 
-    // Light throughput every 4s
-    lightIntervalRef.current = setInterval(() => {
-      runLightThroughput().catch(() => {});
-    }, 4000);
-
-    // Heavy throughput every 25s
-    heavyIntervalRef.current = setInterval(async () => {
-      if (!isRunningRef.current || throughputInFlightRef.current) return;
-
-      throughputInFlightRef.current = true;
-      try {
-        setPhase('download');
-        const dl = await measureDownload(4 * 1024 * 1024); // 4MB
-        if (!isRunningRef.current) return;
-        setPhase('upload');
-        const ul = await measureUpload(2 * 1024 * 1024); // 2MB
-        if (!isRunningRef.current) return;
-        setMetrics({ download: dl.mbps, upload: ul.mbps });
-      } finally {
-        throughputInFlightRef.current = false;
-      }
-    }, 25000);
-
-    // Initial light run
-    setTimeout(() => runLightThroughput().catch(() => {}), 500);
+    // Start continuous loop
+    runContinuousThroughput().catch(() => {});
   }, [
     acquireWakeLock, addPingSample, commitSnapshot, pollNetworkInfo,
-    runLightThroughput, setMetrics, setMonitoring, setPhase, setSessionId,
+    runContinuousThroughput, setMetrics, setMonitoring, setPhase, setSessionId,
   ]);
 
   // ── Stop Monitoring ─────────────────────────────────────────────────────────
   const stopMonitoring = useCallback(async () => {
     isRunningRef.current = false;
     throughputInFlightRef.current = false;
-
-    if (lightIntervalRef.current) {
-      clearInterval(lightIntervalRef.current);
-      lightIntervalRef.current = null;
-    }
-    if (heavyIntervalRef.current) {
-      clearInterval(heavyIntervalRef.current);
-      heavyIntervalRef.current = null;
-    }
 
     socketService.stopHeartbeat();
     socketService.disconnect();
