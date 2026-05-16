@@ -57,6 +57,25 @@ function pruneSessions() {
 
 setInterval(pruneSessions, 5 * 60 * 1000).unref();
 
+function finiteNumber(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function sanitizeMetricSnapshot(data) {
+  const source = data && typeof data === 'object' ? data : {};
+  return {
+    clientTs: finiteNumber(source.ts, Date.now()),
+    download: Math.max(0, finiteNumber(source.download)),
+    upload: Math.max(0, finiteNumber(source.upload)),
+    ping: Math.max(0, finiteNumber(source.ping)),
+    jitter: Math.max(0, finiteNumber(source.jitter)),
+    packetLoss: Math.max(0, Math.min(100, finiteNumber(source.packetLoss))),
+    stability: Math.max(0, Math.min(100, finiteNumber(source.stability))),
+    ts: Date.now(),
+  };
+}
+
 // ─── Random Data Endpoint (Download Test) ────────────────────────────────────
 app.get('/api/download', (req, res) => {
   const requestedSize = Number.parseInt(req.query.size, 10);
@@ -142,7 +161,10 @@ io.on('connection', (socket) => {
     if (session.metrics.length > 3600) {
       session.metrics.shift(); // Rolling 1hr window
     }
-    session.metrics.push({ ...data, ts: Date.now() });
+
+    const snapshot = sanitizeMetricSnapshot(data);
+    session.metrics.push(snapshot);
+    session.latestMetric = snapshot;
   });
 
   socket.on('disconnect', (reason) => {

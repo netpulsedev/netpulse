@@ -33,6 +33,7 @@ export function useDiagnostics() {
   const totalHeartbeatsRef = useRef(0);
   const missedHeartbeatsRef = useRef(0);
   const isRunningRef = useRef(false);
+  const throughputInFlightRef = useRef(false);
 
   // ── Acquire Wake Lock ───────────────────────────────────────────────────────
   const acquireWakeLock = useCallback(async () => {
@@ -69,23 +70,29 @@ export function useDiagnostics() {
 
   // ── Throughput Measurement ──────────────────────────────────────────────────
   const runLightThroughput = useCallback(async () => {
-    if (!isRunningRef.current) return;
-    const { download: lastDl, upload: lastUl } = useNetworkStore.getState();
+    if (!isRunningRef.current || throughputInFlightRef.current) return;
 
-    setPhase('download');
-    const dlSize = adaptiveDownloadSize(lastDl);
-    const dl = await measureDownload(dlSize);
+    throughputInFlightRef.current = true;
+    try {
+      const { download: lastDl, upload: lastUl } = useNetworkStore.getState();
 
-    if (!isRunningRef.current) return;
+      setPhase('download');
+      const dlSize = adaptiveDownloadSize(lastDl);
+      const dl = await measureDownload(dlSize);
 
-    setPhase('upload');
-    const ulSize = adaptiveUploadSize(lastUl);
-    const ul = await measureUpload(ulSize);
+      if (!isRunningRef.current) return;
 
-    if (!isRunningRef.current) return;
+      setPhase('upload');
+      const ulSize = adaptiveUploadSize(lastUl);
+      const ul = await measureUpload(ulSize);
 
-    setPhase('analyzing');
-    setMetrics({ download: dl.mbps, upload: ul.mbps });
+      if (!isRunningRef.current) return;
+
+      setPhase('analyzing');
+      setMetrics({ download: dl.mbps, upload: ul.mbps });
+    } finally {
+      throughputInFlightRef.current = false;
+    }
   }, [setMetrics, setPhase]);
 
   // ── History Push ─────────────────────────────────────────────────────────────
@@ -99,7 +106,7 @@ export function useDiagnostics() {
     setMetrics({ jitter, packetLoss: pl, stability });
     setQuality(quality);
 
-    pushHistory({
+    const snapshot = {
       ts: Date.now(),
       download: s.download,
       upload: s.upload,
@@ -107,7 +114,10 @@ export function useDiagnostics() {
       jitter,
       packetLoss: pl,
       stability,
-    });
+    };
+
+    pushHistory(snapshot);
+    socketService.pushMetrics(snapshot);
   }, [setMetrics, setQuality, pushHistory]);
 
   // ── Start Monitoring ────────────────────────────────────────────────────────
@@ -124,9 +134,6 @@ export function useDiagnostics() {
 
     await acquireWakeLock();
     pollNetworkInfo();
-
-    // Connect WebSocket
-    socketService.connect();
 
     socketService.onSession((id) => setSessionId(id));
 
@@ -156,6 +163,9 @@ export function useDiagnostics() {
       commitSnapshot();
     });
 
+    // Connect after handlers are registered so fast connections cannot miss setup.
+    socketService.connect();
+
     // Light throughput every 4s
     lightIntervalRef.current = setInterval(() => {
       runLightThroughput().catch(() => {});
@@ -163,14 +173,20 @@ export function useDiagnostics() {
 
     // Heavy throughput every 25s
     heavyIntervalRef.current = setInterval(async () => {
-      if (!isRunningRef.current) return;
-      setPhase('download');
-      const dl = await measureDownload(4 * 1024 * 1024); // 4MB
-      if (!isRunningRef.current) return;
-      setPhase('upload');
-      const ul = await measureUpload(2 * 1024 * 1024); // 2MB
-      if (!isRunningRef.current) return;
-      setMetrics({ download: dl.mbps, upload: ul.mbps });
+      if (!isRunningRef.current || throughputInFlightRef.current) return;
+
+      throughputInFlightRef.current = true;
+      try {
+        setPhase('download');
+        const dl = await measureDownload(4 * 1024 * 1024); // 4MB
+        if (!isRunningRef.current) return;
+        setPhase('upload');
+        const ul = await measureUpload(2 * 1024 * 1024); // 2MB
+        if (!isRunningRef.current) return;
+        setMetrics({ download: dl.mbps, upload: ul.mbps });
+      } finally {
+        throughputInFlightRef.current = false;
+      }
     }, 25000);
 
     // Initial light run
@@ -183,6 +199,7 @@ export function useDiagnostics() {
   // ── Stop Monitoring ─────────────────────────────────────────────────────────
   const stopMonitoring = useCallback(async () => {
     isRunningRef.current = false;
+    throughputInFlightRef.current = false;
 
     if (lightIntervalRef.current) {
       clearInterval(lightIntervalRef.current);
