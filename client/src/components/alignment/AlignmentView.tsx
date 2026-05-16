@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ArrowDown, ArrowUp, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { useNetworkStore } from '../../store/networkStore';

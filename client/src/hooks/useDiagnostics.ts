@@ -24,7 +24,6 @@ export function useDiagnostics() {
   const {
     setMetrics, setPhase, setMonitoring, setSessionId,
     setWakeLock, setNetworkInfo, addPingSample, pushHistory, setQuality,
-    isMonitoring, download, upload, pingHistory,
   } = store;
 
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
@@ -58,7 +57,7 @@ export function useDiagnostics() {
 
   // ── Network Info API ────────────────────────────────────────────────────────
   const pollNetworkInfo = useCallback(() => {
-    const conn = (navigator as any).connection;
+    const conn = (navigator as Navigator & { connection?: { effectiveType?: string; downlink?: number; rtt?: number } }).connection;
     if (conn) {
       setNetworkInfo({
         effectiveType: conn.effectiveType ?? '—',
@@ -121,6 +120,7 @@ export function useDiagnostics() {
     packetLossRef.current = 0;
     totalHeartbeatsRef.current = 0;
     missedHeartbeatsRef.current = 0;
+    socketService.resetHeartbeatStats();
 
     await acquireWakeLock();
     pollNetworkInfo();
@@ -134,9 +134,14 @@ export function useDiagnostics() {
       socketService.startHeartbeat(1000);
     });
 
-    socketService.onDisconnect(() => {
-      // Count disconnects as packet loss
-      missedHeartbeatsRef.current += 3;
+    socketService.onDisconnect((unexpected) => {
+      if (!unexpected) return;
+
+      // Count unexpected disconnects as packet loss so brief drops are visible in the UI.
+      socketService.markDisconnectAsMissed();
+      missedHeartbeatsRef.current = socketService.getMissedHeartbeats();
+      packetLossRef.current = socketService.getPacketLossPercent();
+      setMetrics({ packetLoss: packetLossRef.current });
     });
 
     socketService.onPing((ping) => {
@@ -144,11 +149,9 @@ export function useDiagnostics() {
       setMetrics({ ping });
       totalHeartbeatsRef.current++;
 
-      // Packet loss: rolling missed / total
-      const missed = socketService.getMissedHeartbeats();
-      const total = totalHeartbeatsRef.current + missed;
-      const pl = total > 0 ? Math.round((missed / total) * 100 * 10) / 10 : 0;
-      packetLossRef.current = pl;
+      // Packet loss: missed / sent heartbeat ratio maintained by the socket service.
+      missedHeartbeatsRef.current = socketService.getMissedHeartbeats();
+      packetLossRef.current = socketService.getPacketLossPercent();
 
       commitSnapshot();
     });
