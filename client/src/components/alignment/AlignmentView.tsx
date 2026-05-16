@@ -4,6 +4,7 @@ import { X, ArrowDown, ArrowUp, TrendingUp, TrendingDown, Minus } from 'lucide-r
 import { useNetworkStore } from '../../store/networkStore';
 import { getQualityColor, getQualityLabel } from '../../utils/stability';
 import { useFullscreen } from '../../hooks/useUtils';
+import { AnimatedNumber } from '../metrics/AnimatedNumber';
 
 interface AlignmentViewProps {
   onClose: () => void;
@@ -118,16 +119,15 @@ export function AlignmentView({ onClose }: AlignmentViewProps) {
             animate={{ scale: 1 }}
             transition={{ type: 'spring', stiffness: 300, damping: 20 }}
           >
-            <span
-              className="metric-value font-black leading-none"
+            <AnimatedNumber
+              className="metric-value font-black leading-none tabular-nums"
               style={{
                 fontSize: 'clamp(5rem, 15vw, 10rem)',
                 color: qualityColor,
                 textShadow: `0 0 60px ${qualityColor}80, 0 0 120px ${qualityColor}30`,
               }}
-            >
-              {isMonitoring ? stability : '—'}
-            </span>
+              value={isMonitoring ? stability : '—'}
+            />
 
             <motion.span
               key={qualityLabel}
@@ -156,12 +156,11 @@ export function AlignmentView({ onClose }: AlignmentViewProps) {
             transition={{ delay: 0.2 }}
           >
             <ArrowDown size={28} color="#00E5FF" />
-            <span
-              className="metric-value font-black"
+            <AnimatedNumber
+              className="metric-value font-black tabular-nums"
               style={{ fontSize: 'clamp(2rem, 5vw, 4rem)', color: '#00E5FF', textShadow: '0 0 30px #00E5FF60' }}
-            >
-              {download > 0 ? download.toFixed(0) : '—'}
-            </span>
+              value={download > 0 ? download.toFixed(0) : '—'}
+            />
             <span className="text-2xl font-semibold" style={{ color: 'rgba(0,229,255,0.6)' }}>Mbps</span>
             <TrendArrow current={download} previous={prevDl} threshold={2} />
           </motion.div>
@@ -174,12 +173,11 @@ export function AlignmentView({ onClose }: AlignmentViewProps) {
             transition={{ delay: 0.3 }}
           >
             <ArrowUp size={28} color="#7C4DFF" />
-            <span
-              className="metric-value font-black"
+            <AnimatedNumber
+              className="metric-value font-black tabular-nums"
               style={{ fontSize: 'clamp(2rem, 5vw, 4rem)', color: '#7C4DFF', textShadow: '0 0 30px #7C4DFF60' }}
-            >
-              {upload > 0 ? upload.toFixed(0) : '—'}
-            </span>
+              value={upload > 0 ? upload.toFixed(0) : '—'}
+            />
             <span className="text-2xl font-semibold" style={{ color: 'rgba(124,77,255,0.6)' }}>Mbps</span>
             <TrendArrow current={upload} previous={prevUl} threshold={1} />
           </motion.div>
@@ -191,15 +189,17 @@ export function AlignmentView({ onClose }: AlignmentViewProps) {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
           >
-            <span
-              className="metric-value font-bold"
-              style={{
-                fontSize: 'clamp(1.5rem, 4vw, 3rem)',
-                color: ping > 0 && ping < 30 ? '#00FF95' : ping < 80 ? '#FFD600' : '#FF1744',
-              }}
-            >
-              {ping > 0 ? ping : '—'}ms
-            </span>
+            <div className="flex items-baseline font-variant-numeric: tabular-nums">
+              <AnimatedNumber
+                className="metric-value font-bold"
+                style={{
+                  fontSize: 'clamp(1.5rem, 4vw, 3rem)',
+                  color: ping > 0 && ping < 30 ? '#00FF95' : ping < 80 ? '#FFD600' : '#FF1744',
+                }}
+                value={ping > 0 ? ping : '—'}
+              />
+              <span className="metric-value font-bold" style={{ fontSize: 'clamp(1rem, 2.5vw, 2rem)', color: ping > 0 && ping < 30 ? '#00FF95' : ping < 80 ? '#FFD600' : '#FF1744', marginLeft: '2px' }}>ms</span>
+            </div>
             <span className="text-lg" style={{ color: 'rgba(240,244,255,0.4)' }}>latency</span>
           </motion.div>
         </div>

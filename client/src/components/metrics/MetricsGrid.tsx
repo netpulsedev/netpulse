@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { ArrowDown, ArrowUp, Activity, Zap, Wifi, Shield } from 'lucide-react';
 import { useNetworkStore } from '../../store/networkStore';
 import { getQualityColor } from '../../utils/stability';
+import { AnimatedNumber } from './AnimatedNumber';
 
 interface MetricCardProps {
   id: string;
@@ -53,24 +54,16 @@ function MetricCard({ id, label, value, unit, icon, color, subtext }: MetricCard
       </div>
 
       {/* Value + unit */}
-      <div className="flex items-end gap-1.5 min-w-0">
-        <AnimatePresence mode="wait">
-          <motion.span
-            key={String(value)}
-            className="metric-value font-black leading-none truncate"
-            style={{
-              fontSize: 'clamp(1.4rem, 3.5vw, 2.2rem)',
-              color,
-              textShadow: `0 0 20px ${color}50`,
-            }}
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            transition={{ duration: 0.15 }}
-          >
-            {value}
-          </motion.span>
-        </AnimatePresence>
+      <div className="flex items-end gap-1.5 min-w-0 tabular-nums">
+        <AnimatedNumber
+          value={value}
+          className="metric-value font-black leading-none truncate"
+          style={{
+            fontSize: 'clamp(1.4rem, 3.5vw, 2.2rem)',
+            color,
+            textShadow: `0 0 20px ${color}50`,
+          }}
+        />
         {unit && (
           <span
             className="font-medium flex-shrink-0 pb-0.5"
