@@ -76,6 +76,7 @@ class SocketService {
   }
 
   pushMetrics(data: object) {
+    void data;
     // No backend to push to, just ignore
   }
 

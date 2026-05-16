@@ -29,6 +29,7 @@ export async function measureDownload(sizeBytes = 512 * 1024, onProgress?: (mbps
 
     const reader = res.body.getReader();
     let lastCallbackTime = start;
+    let totalBytes = 0;
 
     while (true) {
       const { done, value } = await reader.read();
@@ -58,7 +59,7 @@ export async function measureDownload(sizeBytes = 512 * 1024, onProgress?: (mbps
  */
 export async function measureUpload(sizeBytes = 256 * 1024, onProgress?: (mbps: number) => void): Promise<ThroughputResult> {
   const start = performance.now();
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     try {
       const data = new Uint8Array(sizeBytes);
       crypto.getRandomValues(data.subarray(0, Math.min(sizeBytes, 65536)));
