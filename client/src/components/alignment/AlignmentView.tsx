@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, ArrowDown, ArrowUp, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { useNetworkStore } from '../../store/networkStore';
 import { getQualityColor, getQualityLabel } from '../../utils/stability';
+import { getPingLabel, getJitterLabel } from '../../utils/classify';
 import { useFullscreen } from '../../hooks/useUtils';
 import { AnimatedNumber } from '../metrics/AnimatedNumber';
 
@@ -46,12 +47,16 @@ function PulseRing({ color }: { color: string }) {
 }
 
 export function AlignmentView({ onClose }: AlignmentViewProps) {
-  const { download, upload, ping, stability, isMonitoring, history } = useNetworkStore();
+  const { download, upload, ping, jitter, stability, isMonitoring, history } = useNetworkStore();
   const { enter: enterFullscreen, exit: exitFullscreen } = useFullscreen();
   const containerRef = useRef<HTMLDivElement>(null);
 
   const qualityColor = getQualityColor(stability);
   const qualityLabel = getQualityLabel(stability);
+
+  // Quality classification labels for ping and jitter
+  const pingClass = getPingLabel(ping);
+  const jitterClass = getJitterLabel(jitter);
 
   const prev = history.length >= 2 ? history[history.length - 2] : null;
   const prevDl = prev?.download ?? download;
@@ -62,7 +67,6 @@ export function AlignmentView({ onClose }: AlignmentViewProps) {
     return () => { exitFullscreen(); };
   }, [enterFullscreen, exitFullscreen]);
 
-  // Score gradient background
   const bgGradient =
     stability >= 81
       ? 'radial-gradient(ellipse at center, rgba(0, 255, 149, 0.08) 0%, #050816 65%)'
@@ -107,11 +111,10 @@ export function AlignmentView({ onClose }: AlignmentViewProps) {
           </span>
         </div>
 
-        {/* Main score */}
+        {/* Main stability score */}
         <div className="relative flex flex-col items-center justify-center">
           <PulseRing color={qualityColor} />
 
-          {/* Score number */}
           <motion.div
             key={stability}
             className="relative z-10 flex flex-col items-center"
@@ -182,25 +185,46 @@ export function AlignmentView({ onClose }: AlignmentViewProps) {
             <TrendArrow current={upload} previous={prevUl} threshold={1} />
           </motion.div>
 
-          {/* Ping */}
+          {/* Ping with quality classification */}
           <motion.div
             className="flex items-center gap-3 mt-2"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
           >
-            <div className="flex items-baseline font-variant-numeric: tabular-nums">
+            <div className="flex items-baseline tabular-nums">
               <AnimatedNumber
                 className="metric-value font-bold"
                 style={{
                   fontSize: 'clamp(1.5rem, 4vw, 3rem)',
-                  color: ping > 0 && ping < 30 ? '#00FF95' : ping < 80 ? '#FFD600' : '#FF1744',
+                  color: pingClass.color,
                 }}
                 value={ping > 0 ? ping : '—'}
               />
-              <span className="metric-value font-bold" style={{ fontSize: 'clamp(1rem, 2.5vw, 2rem)', color: ping > 0 && ping < 30 ? '#00FF95' : ping < 80 ? '#FFD600' : '#FF1744', marginLeft: '2px' }}>ms</span>
+              <span className="metric-value font-bold" style={{ fontSize: 'clamp(1rem, 2.5vw, 2rem)', color: pingClass.color, marginLeft: '2px' }}>ms</span>
             </div>
-            <span className="text-lg" style={{ color: 'rgba(240,244,255,0.4)' }}>latency</span>
+            <span className="text-lg font-semibold" style={{ color: pingClass.color, opacity: 0.7 }}>
+              {ping > 0 ? pingClass.text : 'latency'}
+            </span>
+          </motion.div>
+
+          {/* Jitter with quality classification */}
+          <motion.div
+            className="flex items-center gap-2"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5 }}
+          >
+            <span className="text-sm font-medium" style={{ color: 'rgba(240,244,255,0.35)' }}>Jitter</span>
+            <span className="text-sm font-bold tabular-nums" style={{ color: jitterClass.color }}>
+              {jitter > 0 ? `${jitter.toFixed(1)}ms` : '—'}
+            </span>
+            {jitter > 0 && (
+              <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full"
+                style={{ background: `${jitterClass.color}15`, color: jitterClass.color }}>
+                {jitterClass.text}
+              </span>
+            )}
           </motion.div>
         </div>
 

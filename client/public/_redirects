@@ -1,0 +1,21 @@
+# Cloudflare Pages _redirects
+#
+# This file configures how Pages handles incoming requests.
+#
+# ─── Worker API Proxy ─────────────────────────────────────────────────────────
+# Route all /api/* requests to the NetPulse Worker.
+# Replace the target URL with your actual deployed Worker URL.
+#
+# NOTE: If you use the Cloudflare Pages + Workers integration (binding the
+# Worker directly in the Pages project dashboard), you do NOT need this file —
+# the binding handles routing transparently. This file is only needed if the
+# Worker is deployed as a standalone Workers service.
+#
+# Format: <source> <destination> <status-code>
+#
+# /api/*  https://netpulse-worker.YOUR-SUBDOMAIN.workers.dev/:splat  200
+#
+# ─── SPA Fallback ─────────────────────────────────────────────────────────────
+# All unmatched routes return index.html so React Router handles client-side
+# navigation. Must be the last rule.
+/*  /index.html  200

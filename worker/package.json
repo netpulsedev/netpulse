@@ -1,0 +1,19 @@
+{
+  "name": "netpulse-worker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "NetPulse Cloudflare Worker — API abstraction layer for diagnostics endpoints",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "deploy:staging": "wrangler deploy --env staging",
+    "deploy:production": "wrangler deploy --env production",
+    "build": "tsc --noEmit",
+    "type-check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241224.0",
+    "typescript": "~5.5.0",
+    "wrangler": "^3.95.0"
+  }
+}

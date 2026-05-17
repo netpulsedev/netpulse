@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { ArrowDown, ArrowUp, Activity, Zap, Wifi, Shield } from 'lucide-react';
 import { useNetworkStore } from '../../store/networkStore';
 import { getQualityColor } from '../../utils/stability';
+import { getPingLabel, getJitterLabel, getPacketLossLabel, getStabilityLabel } from '../../utils/classify';
 import { AnimatedNumber } from './AnimatedNumber';
 
 interface MetricCardProps {
@@ -13,9 +14,10 @@ interface MetricCardProps {
   icon: ReactNode;
   color: string;
   subtext?: string;
+  subtextColor?: string;
 }
 
-function MetricCard({ id, label, value, unit, icon, color, subtext }: MetricCardProps) {
+function MetricCard({ id, label, value, unit, icon, color, subtext, subtextColor }: MetricCardProps) {
   return (
     <motion.div
       id={id}
@@ -75,7 +77,7 @@ function MetricCard({ id, label, value, unit, icon, color, subtext }: MetricCard
       </div>
 
       {subtext && (
-        <p style={{ fontSize: '0.68rem', color: 'rgba(240,244,255,0.35)' }}>{subtext}</p>
+        <p style={{ fontSize: '0.68rem', color: subtextColor ?? 'rgba(240,244,255,0.35)' }}>{subtext}</p>
       )}
     </motion.div>
   );
@@ -95,6 +97,12 @@ export function MetricsGrid() {
 
   const dl = getSpeedDisplay(download);
   const ul = getSpeedDisplay(upload);
+
+  // Color-coded quality labels for each metric
+  const pingClassify = getPingLabel(ping);
+  const jitterClassify = getJitterLabel(jitter);
+  const plClassify = getPacketLossLabel(packetLoss);
+  const stabilityClassify = getStabilityLabel(stability);
 
   const pingColor = ping > 0
     ? (ping < 30 ? '#00FF95' : ping < 80 ? '#FFD600' : '#FF1744')
@@ -129,7 +137,8 @@ export function MetricsGrid() {
         unit={idle ? undefined : 'ms'}
         icon={<Activity size={14} />}
         color={idle ? '#00E5FF' : pingColor}
-        subtext="Latency"
+        subtext={idle ? 'Latency' : `${Math.round(ping)}ms · ${pingClassify.text}`}
+        subtextColor={idle ? undefined : pingClassify.color}
       />
       <MetricCard
         id="metric-jitter"
@@ -138,7 +147,8 @@ export function MetricsGrid() {
         unit={idle ? undefined : 'ms'}
         icon={<Zap size={14} />}
         color={idle ? '#7C4DFF' : jitterColor}
-        subtext="Variance"
+        subtext={idle ? 'Variance' : `${jitter.toFixed(1)}ms · ${jitterClassify.text}`}
+        subtextColor={idle ? undefined : jitterClassify.color}
       />
       <MetricCard
         id="metric-packetloss"
@@ -147,7 +157,8 @@ export function MetricsGrid() {
         unit={idle ? undefined : '%'}
         icon={<Wifi size={14} />}
         color={idle ? '#00FF95' : plColor}
-        subtext="Lost pkts"
+        subtext={idle ? 'Lost pkts' : plClassify.text}
+        subtextColor={idle ? undefined : plClassify.color}
       />
       <MetricCard
         id="metric-stability"
@@ -156,13 +167,8 @@ export function MetricsGrid() {
         unit={idle ? undefined : '/100'}
         icon={<Shield size={14} />}
         color={idle ? '#7C4DFF' : qualityColor}
-        subtext={
-          idle ? 'Idle'
-          : stability >= 81 ? 'Excellent'
-          : stability >= 66 ? 'Good'
-          : stability >= 41 ? 'Fair'
-          : 'Poor'
-        }
+        subtext={idle ? 'Idle' : stabilityClassify.text}
+        subtextColor={idle ? undefined : stabilityClassify.color}
       />
     </div>
   );

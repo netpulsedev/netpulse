@@ -1,17 +1,21 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Activity, Radio } from 'lucide-react';
+import { ArrowLeft, Activity, Radio, TrendingUp, TrendingDown, Minus, AlertTriangle } from 'lucide-react';
 import { MetricsGrid } from '../components/metrics/MetricsGrid';
 import { ThroughputChart, PingChart, StabilityChart } from '../components/charts/Charts';
 import { SessionSummary } from '../components/dashboard/SessionSummary';
 import { ControlBar } from '../components/dashboard/ControlBar';
 import { AlignmentView } from '../components/alignment/AlignmentView';
+import { EdgeRegionBadge } from '../components/dashboard/EdgeRegionBadge';
+import { EventsTimeline } from '../components/dashboard/EventsTimeline';
+import { RecentSessions } from '../components/dashboard/RecentSessions';
 import { useNetworkStore } from '../store/networkStore';
 import { getQualityColor, getQualityLabel, formatDuration } from '../utils/stability';
+import { analyzeTrend, getTrendColor, getTrendLabel } from '../utils/trends';
 import { useElapsedTime } from '../hooks/useUtils';
 
-// ─── Session Timer ────────────────────────────────────────────────────────────
+// Shows how long the current session has been running.
 function SessionTimer() {
   const { sessionStart, isMonitoring } = useNetworkStore();
   const elapsed = useElapsedTime(sessionStart, isMonitoring);
@@ -26,7 +30,7 @@ function SessionTimer() {
   );
 }
 
-// ─── Network Quality Badge ────────────────────────────────────────────────────
+// Color-coded badge showing overall connection quality.
 function QualityBadge() {
   const { stability, isMonitoring } = useNetworkStore();
   if (!isMonitoring) return null;
@@ -40,6 +44,38 @@ function QualityBadge() {
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
     >
+      {label}
+    </motion.span>
+  );
+}
+
+// Shows whether the connection is improving, stable, degrading, or unstable.
+function TrendBadge() {
+  const history = useNetworkStore(s => s.history);
+  const isMonitoring = useNetworkStore(s => s.isMonitoring);
+
+  const trend = useMemo(() => analyzeTrend(history), [history]);
+
+  if (!isMonitoring || history.length < 10) return null;
+
+  const color = getTrendColor(trend.direction);
+  const label = getTrendLabel(trend.direction);
+
+  const TrendIcon = trend.direction === 'improving' ? TrendingUp
+    : trend.direction === 'degrading' ? TrendingDown
+    : trend.direction === 'unstable' ? AlertTriangle
+    : Minus;
+
+  return (
+    <motion.span
+      key={trend.direction}
+      className="hidden sm:flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-semibold"
+      style={{ background: `${color}10`, border: `1px solid ${color}20`, color }}
+      initial={{ opacity: 0, scale: 0.9 }}
+      animate={{ opacity: 1, scale: 1 }}
+      title={`Short-term avg: ${trend.shortTermAvg} · Long-term avg: ${trend.longTermAvg}`}
+    >
+      <TrendIcon size={10} />
       {label}
     </motion.span>
   );
@@ -64,11 +100,11 @@ export default function DashboardPage() {
       <div className="fixed inset-0 pointer-events-none"
         style={{ background: 'radial-gradient(ellipse 100% 40% at 50% 0%, rgba(0,229,255,0.05) 0%, transparent 65%)' }} />
 
-      {/* ── Header ─────────────────────────────────────────────────────── */}
+      {/* Header */}
       <header className="relative z-10 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
         <div className="max-w-screen-2xl mx-auto px-4 md:px-6 h-13 flex items-center gap-6" style={{ height: '52px' }}>
 
-          {/* Back */}
+          {/* Back button */}
           <button
             id="btn-back-home"
             className="flex items-center gap-1.5 text-xs font-medium transition-colors duration-150 flex-shrink-0"
@@ -96,23 +132,23 @@ export default function DashboardPage() {
             </span>
           </div>
 
-          {/* Spacer */}
           <div className="flex-1" />
 
-          {/* Status row */}
-          <div className="flex items-center gap-4 flex-shrink-0">
+          {/* Status badges */}
+          <div className="flex items-center gap-3 flex-shrink-0">
             <QualityBadge />
+            <TrendBadge />
             <SessionTimer />
+            <EdgeRegionBadge />
 
             {effectiveType && effectiveType !== '—' && (
-              <span className="hidden md:flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-semibold"
+              <span className="hidden lg:flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-semibold"
                 style={{ background: 'rgba(124,77,255,0.1)', border: '1px solid rgba(124,77,255,0.2)', color: '#7C4DFF' }}>
                 <Radio size={10} />
                 {effectiveType.toUpperCase()}
               </span>
             )}
 
-            {/* Status dot */}
             <div className="flex items-center gap-1.5">
               <div className={`status-dot ${isMonitoring ? 'active' : 'inactive'}`} />
               <span className="text-xs hidden sm:inline" style={{ color: 'rgba(240,244,255,0.4)' }}>
@@ -123,16 +159,14 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      {/* ── Main content ────────────────────────────────────────────────── */}
+      {/* Main content */}
       <main className="relative z-10 flex-1 max-w-screen-2xl mx-auto w-full px-4 md:px-6 py-4 flex flex-col gap-4">
 
-        {/* Control bar */}
         <ControlBar onAlignmentMode={() => setAlignmentMode(true)} />
 
-        {/* Metric cards */}
         <MetricsGrid />
 
-        {/* Charts — 2/3 + 1/3 split */}
+        {/* Charts row: throughput (2/3) + ping (1/3) */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="lg:col-span-2">
             <ThroughputChart />
@@ -142,24 +176,39 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Stability + Session analytics */}
+        {/* Stability + Events row */}
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
           <div className="lg:col-span-2">
             <StabilityChart />
           </div>
           <div className="lg:col-span-3">
+            <EventsTimeline />
+          </div>
+        </div>
+
+        {/* Session analytics + recent sessions */}
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+          <div className="lg:col-span-3">
             <SessionSummary />
+          </div>
+          <div className="lg:col-span-2">
+            <RecentSessions />
           </div>
         </div>
       </main>
 
-      {/* ── Footer ──────────────────────────────────────────────────────── */}
+      {/* Footer with transparency notice */}
       <footer className="relative z-10 flex-shrink-0 text-center py-3"
         style={{ borderTop: '1px solid rgba(255,255,255,0.04)', color: 'rgba(240,244,255,0.18)' }}>
-        <p className="text-xs tracking-wider">NetPulse v1.0 · Continuous Internet Diagnostics · All measurements run locally</p>
+        <p className="text-xs tracking-wider">
+          NetPulse v1.0 · Continuous Internet Diagnostics
+        </p>
+        <p className="text-xs mt-1" style={{ color: 'rgba(240,244,255,0.12)' }}>
+          Browser-based measurements may differ from ICMP or system-level diagnostics. Latency reflects HTTP round-trip time.
+        </p>
       </footer>
 
-      {/* ── Idle hint overlay ────────────────────────────────────────────── */}
+      {/* Idle hint overlay */}
       <AnimatePresence>
         {!isMonitoring && (
           <motion.div
@@ -198,7 +247,7 @@ export default function DashboardPage() {
         )}
       </AnimatePresence>
 
-      {/* ── Alignment Mode ───────────────────────────────────────────────── */}
+      {/* Alignment Mode */}
       <AnimatePresence>
         {alignmentMode && (
           <AlignmentView onClose={() => setAlignmentMode(false)} />

@@ -1,6 +1,10 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useNetworkStore } from '../store/networkStore';
-import { socketService } from '../services/socketService';
+import { useEdgeStore } from '../store/edgeStore';
+import { useEventsStore, detectEvents, resetEventDetection } from '../store/eventsStore';
+import { heartbeatService } from '../services/heartbeatService';
+import { saveSession, type SavedSession } from '../services/sessionStorage';
+import { API } from '../config/api';
 import {
   measureDownload,
   measureUpload,
@@ -13,18 +17,19 @@ import {
   getQualityKey,
 } from '../utils/stability';
 
-/**
- * Main diagnostics loop.
- * - 1s: ping/jitter/packet-loss via WebSocket heartbeat
- * - 4s: lightweight throughput sample
- * - 25s: heavier throughput verification
- */
+// Main diagnostics hook.
+// Runs the heartbeat loop for ping/jitter/packet-loss,
+// plus a continuous throughput loop for download/upload.
 export function useDiagnostics() {
   const store = useNetworkStore();
   const {
     setMetrics, setPhase, setMonitoring, setSessionId,
     setWakeLock, setNetworkInfo, addPingSample, pushHistory, setQuality,
   } = store;
+
+  const edgeStore = useEdgeStore();
+  const pushEvent = useEventsStore(s => s.pushEvent);
+  const clearEvents = useEventsStore(s => s.clearEvents);
 
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
   const packetLossRef = useRef(0);
@@ -33,7 +38,7 @@ export function useDiagnostics() {
   const isRunningRef = useRef(false);
   const throughputInFlightRef = useRef(false);
 
-  // ── Acquire Wake Lock ───────────────────────────────────────────────────────
+  // Keep the screen on while monitoring.
   const acquireWakeLock = useCallback(async () => {
     try {
       if ('wakeLock' in navigator) {
@@ -42,7 +47,7 @@ export function useDiagnostics() {
         wakeLockRef.current.addEventListener('release', () => setWakeLock(false));
       }
     } catch {
-      // Wake lock not available or denied — non-fatal
+      // Not available or denied — no big deal.
     }
   }, [setWakeLock]);
 
@@ -54,7 +59,7 @@ export function useDiagnostics() {
     } catch { /* ignore */ }
   }, [setWakeLock]);
 
-  // ── Network Info API ────────────────────────────────────────────────────────
+  // Pull connection type info from the browser's Network Information API (Chrome/Edge).
   const pollNetworkInfo = useCallback(() => {
     const conn = (navigator as Navigator & { connection?: { effectiveType?: string; downlink?: number; rtt?: number } }).connection;
     if (conn) {
@@ -66,19 +71,38 @@ export function useDiagnostics() {
     }
   }, [setNetworkInfo]);
 
+  // Fetch edge region info from the Worker.
+  const fetchEdgeInfo = useCallback(async () => {
+    try {
+      const res = await fetch(`${API.health}?t=${Date.now()}`, { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        edgeStore.setColo(
+          data.colo ?? '',
+          data.region ?? '',
+          data.country ?? '',
+          data.version ?? '',
+        );
+      }
+    } catch {
+      // Worker might not be deployed yet — no worries.
+    }
+  }, [edgeStore]);
+
+  // Continuous download/upload loop.
   const runContinuousThroughput = useCallback(async () => {
     while (isRunningRef.current) {
       if (throughputInFlightRef.current) {
         await new Promise(r => setTimeout(r, 500));
         continue;
       }
-      
+
       throughputInFlightRef.current = true;
       try {
         const { download: lastDl, upload: lastUl } = useNetworkStore.getState();
 
         setPhase('download');
-        const dlSize = adaptiveDownloadSize(lastDl) * 2; // Increase target duration for continuous mode
+        const dlSize = adaptiveDownloadSize(lastDl) * 2;
         const dl = await measureDownload(dlSize, (mbps) => {
           setMetrics({ download: mbps });
         });
@@ -99,13 +123,13 @@ export function useDiagnostics() {
       } finally {
         throughputInFlightRef.current = false;
       }
-      
-      // Short breather to allow ping/heartbeats to measure idle latency
+
+      // Short pause so the heartbeat can measure idle latency between tests.
       await new Promise(r => setTimeout(r, 500));
     }
   }, [setMetrics, setPhase]);
 
-  // ── History Push ─────────────────────────────────────────────────────────────
+  // Commit a snapshot: calculate derived metrics, push to history, detect events.
   const commitSnapshot = useCallback(() => {
     const s = useNetworkStore.getState();
     const jitter = calcJitter(s.pingHistory);
@@ -127,10 +151,13 @@ export function useDiagnostics() {
     };
 
     pushHistory(snapshot);
-    socketService.pushMetrics(snapshot);
-  }, [setMetrics, setQuality, pushHistory]);
+    heartbeatService.pushMetrics(snapshot);
 
-  // ── Start Monitoring ────────────────────────────────────────────────────────
+    // Generate events based on how the metrics changed.
+    detectEvents(snapshot, pushEvent);
+  }, [setMetrics, setQuality, pushHistory, pushEvent]);
+
+  // Start everything.
   const startMonitoring = useCallback(async () => {
     if (isRunningRef.current) return;
     isRunningRef.current = true;
@@ -140,63 +167,83 @@ export function useDiagnostics() {
     packetLossRef.current = 0;
     totalHeartbeatsRef.current = 0;
     missedHeartbeatsRef.current = 0;
-    socketService.resetHeartbeatStats();
+    heartbeatService.resetHeartbeatStats();
+    resetEventDetection();
+    clearEvents();
 
     await acquireWakeLock();
     pollNetworkInfo();
+    fetchEdgeInfo();
 
-    socketService.onSession((id) => setSessionId(id));
+    heartbeatService.onSession((id) => setSessionId(id));
 
-    socketService.onConnect(() => {
-      socketService.startHeartbeat(250);
+    heartbeatService.onConnect(() => {
+      heartbeatService.startHeartbeat(250);
     });
 
-    socketService.onDisconnect((unexpected) => {
+    heartbeatService.onDisconnect((unexpected) => {
       if (!unexpected) return;
-
-      // Count unexpected disconnects as packet loss so brief drops are visible in the UI.
-      socketService.markDisconnectAsMissed();
-      missedHeartbeatsRef.current = socketService.getMissedHeartbeats();
-      packetLossRef.current = socketService.getPacketLossPercent();
+      heartbeatService.markDisconnectAsMissed();
+      missedHeartbeatsRef.current = heartbeatService.getMissedHeartbeats();
+      packetLossRef.current = heartbeatService.getPacketLossPercent();
       setMetrics({ packetLoss: packetLossRef.current });
     });
 
-    socketService.onPing((ping) => {
+    heartbeatService.onPing((ping) => {
       addPingSample(ping);
       setMetrics({ ping });
       totalHeartbeatsRef.current++;
 
-      // Packet loss: missed / sent heartbeat ratio maintained by the socket service.
-      missedHeartbeatsRef.current = socketService.getMissedHeartbeats();
-      packetLossRef.current = socketService.getPacketLossPercent();
+      missedHeartbeatsRef.current = heartbeatService.getMissedHeartbeats();
+      packetLossRef.current = heartbeatService.getPacketLossPercent();
 
       commitSnapshot();
     });
 
-    // Connect after handlers are registered so fast connections cannot miss setup.
-    socketService.connect();
-
-    // Start continuous loop
+    heartbeatService.connect();
     runContinuousThroughput().catch(() => {});
   }, [
     acquireWakeLock, addPingSample, commitSnapshot, pollNetworkInfo,
-    runContinuousThroughput, setMetrics, setMonitoring, setPhase, setSessionId,
+    fetchEdgeInfo, clearEvents, runContinuousThroughput, setMetrics,
+    setMonitoring, setPhase, setSessionId,
   ]);
 
-  // ── Stop Monitoring ─────────────────────────────────────────────────────────
+  // Stop everything and save the session to IndexedDB.
   const stopMonitoring = useCallback(async () => {
     isRunningRef.current = false;
     throughputInFlightRef.current = false;
 
-    socketService.stopHeartbeat();
-    socketService.disconnect();
+    heartbeatService.stopHeartbeat();
+    heartbeatService.disconnect();
     await releaseWakeLock();
+
+    // Save session locally before resetting.
+    const state = useNetworkStore.getState();
+    const edge = useEdgeStore.getState();
+    if (state.analytics.sampleCount > 2) {
+      const session: SavedSession = {
+        id: state.sessionId ?? crypto.randomUUID(),
+        startedAt: state.sessionStart ?? Date.now(),
+        endedAt: Date.now(),
+        durationMs: state.sessionStart ? Date.now() - state.sessionStart : 0,
+        colo: edge.colo,
+        avgDownload: state.analytics.avgDownload,
+        avgUpload: state.analytics.avgUpload,
+        bestDownload: state.analytics.bestDownload,
+        bestUpload: state.analytics.bestUpload,
+        lowestPing: state.analytics.lowestPing === Infinity ? 0 : state.analytics.lowestPing,
+        peakJitter: state.analytics.peakJitter,
+        avgStability: state.analytics.avgStability,
+        sampleCount: state.analytics.sampleCount,
+      };
+      saveSession(session).catch(() => {});
+    }
 
     setMonitoring(false);
     setPhase('idle');
   }, [releaseWakeLock, setMonitoring, setPhase]);
 
-  // ── Cleanup on unmount ──────────────────────────────────────────────────────
+  // Clean up on unmount.
   useEffect(() => {
     return () => {
       if (isRunningRef.current) {
