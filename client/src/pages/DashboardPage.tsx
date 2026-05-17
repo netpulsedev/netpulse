@@ -1,10 +1,10 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Activity, Radio, TrendingUp, TrendingDown, Minus, AlertTriangle, Wifi, Zap } from 'lucide-react';
+import { ArrowLeft, Activity, Wifi, Zap } from 'lucide-react';
 import { Speedometer } from '../components/metrics/Speedometer';
 import { AnimatedNumber } from '../components/metrics/AnimatedNumber';
-import { ThroughputChart, PingChart, StabilityChart } from '../components/charts/Charts';
+import { ThroughputChart, PingChart } from '../components/charts/Charts';
 import { SessionSummary } from '../components/dashboard/SessionSummary';
 import { ControlBar } from '../components/dashboard/ControlBar';
 import { AlignmentView } from '../components/alignment/AlignmentView';
@@ -14,7 +14,6 @@ import { RecentSessions } from '../components/dashboard/RecentSessions';
 import { useNetworkStore } from '../store/networkStore';
 import { getQualityColor, getQualityLabel, formatDuration } from '../utils/stability';
 import { getPingLabel, getJitterLabel, getPacketLossLabel } from '../utils/classify';
-import { analyzeTrend, getTrendColor, getTrendLabel } from '../utils/trends';
 import { useElapsedTime } from '../hooks/useUtils';
 
 function SessionTimer() {

@@ -1,4 +1,4 @@
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { ArrowDown, ArrowUp } from 'lucide-react';
 import { useNetworkStore } from '../../store/networkStore';
 import { AnimatedNumber } from './AnimatedNumber';
@@ -8,7 +8,7 @@ interface SpeedometerProps {
 }
 
 export function Speedometer({ type }: SpeedometerProps) {
-  const { download, upload, testPhase, isMonitoring } = useNetworkStore();
+  const { download, upload, testPhase } = useNetworkStore();
 
   const isUpload = type === 'upload';
   const isActive = testPhase === type;
