@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/NetPulse-v2.0-22d3ee?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMyMmQzZWUiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cG9seWxpbmUgcG9pbnRzPSIyMiAxMiAxOCA2IDE0IDEyIDEwIDYgNiAxMiAyIDE4Ii8+PC9zdmc+" alt="NetPulse" />
+  <img src="https://img.shields.io/badge/NetPulse-v2.0.0-22d3ee?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMyMmQzZWUiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cG9seWxpbmUgcG9pbnRzPSIyMiAxMiAxOCA2IDE0IDEyIDEwIDYgNiAxMiAyIDE4Ii8+PC9zdmc+" alt="NetPulse" />
   <img src="https://img.shields.io/github/license/netpulsedev/netpulse?style=for-the-badge&color=34d399" alt="License" />
   <img src="https://img.shields.io/badge/Cloudflare-Workers-f38020?style=for-the-badge&logo=cloudflare&logoColor=white" alt="Cloudflare Workers" />
   <img src="https://img.shields.io/badge/React-19-61dafb?style=for-the-badge&logo=react&logoColor=white" alt="React 19" />
@@ -19,6 +19,8 @@
 
 <p align="center">
   <a href="https://netpulse.eu.cc"><strong>🌐 Live Demo →</strong></a>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/netpulsedev/netpulse/discussions"><strong>💬 Discussions</strong></a>
 </p>
 
 ---
@@ -192,6 +194,8 @@ In Cloudflare Dashboard: **Pages → Settings → Functions → Service Bindings
 ## 🤝 Contributing
 
 Contributions are welcome! Please read the [Contributing Guide](CONTRIBUTING.md) before opening a pull request.
+
+Have questions or ideas? Join the [Discussions](https://github.com/netpulsedev/netpulse/discussions).
 
 ## 📄 License
 
