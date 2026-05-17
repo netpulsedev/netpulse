@@ -129,9 +129,7 @@ class HeartbeatService {
 
   // Placeholder for future analytics. Once we have a backend we can
   // POST snapshots here. For now it just does nothing.
-  pushMetrics(_data: object) {
-    // no-op for now
-  }
+  pushMetrics(data?: object) { void data; }
 
   onPing(cb: (ping: number) => void)            { this.onPingCallback = cb; }
   onSession(cb: (id: string) => void)           { this.onSessionCallback = cb; }

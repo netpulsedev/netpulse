@@ -9,14 +9,23 @@ export function RecentSessions() {
   const [sessions, setSessions] = useState<SavedSession[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const loadSessions = async () => {
-    setLoading(true);
-    const results = await getRecentSessions(5);
-    setSessions(results);
-    setLoading(false);
-  };
+  useEffect(() => {
+    let cancelled = false;
 
-  useEffect(() => { loadSessions(); }, []);
+    async function loadSessions() {
+      const results = await getRecentSessions(5);
+      if (cancelled) return;
+
+      setSessions(results);
+      setLoading(false);
+    }
+
+    void loadSessions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleDelete = async (id: string) => {
     await deleteSession(id);
