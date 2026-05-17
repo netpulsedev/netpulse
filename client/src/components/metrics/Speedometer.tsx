@@ -1,5 +1,4 @@
-import { useMemo } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowDown, ArrowUp, Zap } from 'lucide-react';
 import { useNetworkStore } from '../../store/networkStore';
 import { AnimatedNumber } from './AnimatedNumber';
@@ -23,7 +22,6 @@ export function Speedometer() {
   const strokeWidth = 14;
   const normalizedRadius = radius - strokeWidth * 2;
   const circumference = normalizedRadius * 2 * Math.PI;
-  const arcOffset = circumference * 0.25; // Remove bottom quarter
 
   // Cap the display scale to 1000 Mbps for visual fill, scaled logarithmically or linearly.
   // We'll use a simple scale: 0-100 is 50%, 100-1000 is the rest.
