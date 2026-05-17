@@ -5,19 +5,28 @@
  * In development: Vite proxies /api/* to localhost:8787 (wrangler dev),
  * so relative URLs work fine and there's no CORS to worry about.
  *
- * In production on Cloudflare Pages: the Worker is bound to the
- * same domain, so /api/* routes there automatically.
- *
- * If you want to point at a remote Worker during dev instead of
- * running one locally, set VITE_API_BASE in your .env.local:
+ * In production on Cloudflare Pages: set VITE_API_BASE to the Worker origin
+ * if /api/* is not routed on the same domain.
  *   VITE_API_BASE=https://netpulse-worker.yourname.workers.dev
  */
 
-// Use the remote worker directly in production so Cloudflare Pages 
-// doesn't buffer our streaming speed test responses.
-const API_BASE = import.meta.env.DEV 
-  ? '' 
-  : 'https://netpulse-worker-production.sohamd008-cbc.workers.dev';
+function normalizeApiBase(value: unknown): string {
+  if (typeof value !== 'string') return '';
+
+  const trimmed = value.trim().replace(/\/+$/, '');
+  if (!trimmed) return '';
+
+  try {
+    const url = new URL(trimmed);
+    return url.protocol === 'https:' || url.hostname === 'localhost' || url.hostname === '127.0.0.1'
+      ? url.toString().replace(/\/+$/, '')
+      : '';
+  } catch {
+    return '';
+  }
+}
+
+const API_BASE = normalizeApiBase(import.meta.env.VITE_API_BASE);
 
 export const API = {
   ping:   `${API_BASE}/api/ping`,

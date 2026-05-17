@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { MetricSnapshot } from '../store/networkStore';
+import type { MetricSnapshot, SessionAnalytics } from '../store/networkStore';
 
 export function useExport() {
   const exportCSV = useCallback((history: MetricSnapshot[]) => {
@@ -17,7 +17,7 @@ export function useExport() {
     URL.revokeObjectURL(url);
   }, []);
 
-  const exportJSON = useCallback((history: MetricSnapshot[], analytics: any, dataConsumed: number) => {
+  const exportJSON = useCallback((history: MetricSnapshot[], analytics: SessionAnalytics, dataConsumed: number) => {
     const data = {
       exportedAt: new Date().toISOString(),
       summary: {
@@ -36,7 +36,7 @@ export function useExport() {
     URL.revokeObjectURL(url);
   }, []);
 
-  const exportTXT = useCallback((history: MetricSnapshot[], analytics: any, dataConsumed: number, colo: string) => {
+  const exportTXT = useCallback((history: MetricSnapshot[], analytics: SessionAnalytics, dataConsumed: number, colo: string) => {
     const mb = (dataConsumed / 1024 / 1024).toFixed(2);
     const date = new Date().toLocaleString();
     

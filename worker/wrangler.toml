@@ -9,15 +9,24 @@ compatibility_date = "2024-11-01"
 port = 8787
 local_protocol = "http"
 
+[vars]
+CORS_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173,https://netpulse.eu.cc"
+
 # Production deployment config.
 # Run: npm run deploy:production
 [env.production]
 name = "netpulse-worker-production"
 
+[env.production.vars]
+CORS_ORIGINS = "https://netpulse.eu.cc"
+
 # Staging for testing before you go live.
 # Run: npm run deploy:staging
 [env.staging]
 name = "netpulse-worker-staging"
+
+[env.staging.vars]
+CORS_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173,https://netpulse.eu.cc"
 
 [build]
 command = "npm run build"

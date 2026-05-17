@@ -15,6 +15,17 @@ export type ConnectionQuality = 'excellent' | 'good' | 'fair' | 'poor' | 'idle';
 export type TestPhase = 'idle' | 'ping' | 'download' | 'upload' | 'analyzing' | 'active';
 export type TestMode = 'both' | 'download' | 'upload';
 
+export interface SessionAnalytics {
+  avgDownload: number;
+  avgUpload: number;
+  bestDownload: number;
+  bestUpload: number;
+  lowestPing: number;
+  peakJitter: number;
+  avgStability: number;
+  sampleCount: number;
+}
+
 interface NetworkState {
   // Live metrics
   download: number;
@@ -44,18 +55,10 @@ interface NetworkState {
   pingHistory: number[];
 
   // Session analytics
-  analytics: {
-    avgDownload: number;
-    avgUpload: number;
-    bestDownload: number;
-    bestUpload: number;
-    lowestPing: number;
-    peakJitter: number;
-    avgStability: number;
-    sampleCount: number;
-  };
+  analytics: SessionAnalytics;
 
   // Actions
+
   setMetrics: (metrics: Partial<MetricSnapshot>) => void;
   setQuality: (quality: ConnectionQuality) => void;
   setPhase: (phase: TestPhase) => void;
