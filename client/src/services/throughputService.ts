@@ -203,21 +203,20 @@ export async function httpPing(): Promise<number> {
 // ─── Adaptive sizing ──────────────────────────────────────────────────────────
 
 /**
- * Targets ~3 seconds of download at the current speed.
- * Longer tests = more accurate measurements (lets TCP fully ramp up).
- * Max 25 MB total across all streams.
+ * Targets ~2 seconds of download at the current speed.
+ * Capped at 10 MB to avoid tests that take 15+ seconds on slower links.
  */
 export function adaptiveDownloadSize(recentMbps: number): number {
-  if (recentMbps === 0) return 2 * 1024 * 1024; // cold start: 2 MB total
-  const bytes = (recentMbps * 1_000_000 * 3) / 8; // 3 seconds target
-  return Math.max(1 * 1024 * 1024, Math.min(25 * 1024 * 1024, bytes));
+  if (recentMbps === 0) return 1 * 1024 * 1024; // cold start: 1 MB total
+  const bytes = (recentMbps * 1_000_000 * 2) / 8; // 2 seconds target
+  return Math.max(512 * 1024, Math.min(10 * 1024 * 1024, bytes));
 }
 
 /**
- * Targets ~2.5 seconds of upload.
+ * Targets ~1.5 seconds of upload.
  */
 export function adaptiveUploadSize(recentMbps: number): number {
-  if (recentMbps === 0) return 1 * 1024 * 1024; // cold start: 1 MB total
-  const bytes = (recentMbps * 1_000_000 * 2.5) / 8;
-  return Math.max(512 * 1024, Math.min(MAX_UPLOAD_BYTES, bytes));
+  if (recentMbps === 0) return 512 * 1024; // cold start: 512 KB total
+  const bytes = (recentMbps * 1_000_000 * 1.5) / 8;
+  return Math.max(256 * 1024, Math.min(MAX_UPLOAD_BYTES, bytes));
 }

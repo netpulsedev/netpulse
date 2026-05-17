@@ -205,8 +205,16 @@ export function useDiagnostics() {
     });
 
     heartbeatService.onPing((ping) => {
-      addPingSample(ping);
-      setMetrics({ ping });
+      // Only accept ping samples when NOT running throughput tests.
+      // During active download/upload, latency spikes due to bufferbloat
+      // and gives wildly misleading numbers (2000ms+ on a 150ms connection).
+      const phase = useNetworkStore.getState().testPhase;
+      const isDuringTest = phase === 'download' || phase === 'upload';
+
+      if (!isDuringTest) {
+        addPingSample(ping);
+        setMetrics({ ping });
+      }
       totalHeartbeatsRef.current++;
 
       missedHeartbeatsRef.current = heartbeatService.getMissedHeartbeats();
