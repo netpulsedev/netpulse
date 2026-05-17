@@ -1,0 +1,112 @@
+name: 🐛 Bug Report
+description: Report a bug or unexpected behavior in NetPulse
+title: "[Bug]: "
+labels: ["bug", "triage"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! Please fill out the details below so we can investigate.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the bug
+      description: A clear and concise description of what the bug is.
+      placeholder: Tell us what happened...
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: How can we reproduce this behavior?
+      placeholder: |
+        1. Go to '...'
+        2. Click on '...'
+        3. Scroll down to '...'
+        4. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect to happen?
+      placeholder: Tell us what you expected...
+    validations:
+      required: true
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: If applicable, add screenshots to help explain the problem.
+      placeholder: Drag and drop images here...
+    validations:
+      required: false
+
+  - type: dropdown
+    id: browser
+    attributes:
+      label: Browser
+      description: Which browser are you using?
+      options:
+        - Chrome
+        - Firefox
+        - Safari
+        - Edge
+        - Arc
+        - Brave
+        - Other
+      multiple: true
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      description: Which OS are you using?
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - iOS
+        - Android
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: version
+    attributes:
+      label: How are you using NetPulse?
+      options:
+        - Live demo (netpulse.eu.cc)
+        - Self-hosted
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Any other context about the problem? Console errors, network conditions, etc.
+      placeholder: Add any other context here...
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I have searched existing issues to make sure this isn't a duplicate
+          required: true
+        - label: I am using the latest version of NetPulse
+          required: false

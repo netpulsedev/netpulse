@@ -1,0 +1,88 @@
+name: ✨ Feature Request
+description: Suggest a new feature or improvement for NetPulse
+title: "[Feature]: "
+labels: ["enhancement"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Got an idea to make NetPulse better? We'd love to hear it! 💡
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or motivation
+      description: What problem does this feature solve? Is this related to a frustration?
+      placeholder: "I'm always frustrated when..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: Describe the feature or change you'd like to see.
+      placeholder: Tell us your idea...
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Have you considered any alternative solutions or workarounds?
+      placeholder: Describe any alternatives...
+    validations:
+      required: false
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Feature area
+      description: Which part of NetPulse does this relate to?
+      options:
+        - Speed Test (Download/Upload)
+        - Latency & Ping
+        - Jitter & Stability
+        - Alignment Mode
+        - Dashboard & UI
+        - Data Export
+        - Session History
+        - Cloudflare Worker / API
+        - Mobile Experience
+        - Accessibility
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: How important is this to you?
+      options:
+        - Nice to have
+        - Important — affects my workflow
+        - Critical — blocking my use case
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Add any mockups, screenshots, links, or examples that help illustrate the feature.
+      placeholder: Add any other context here...
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I have searched existing issues and discussions to make sure this isn't a duplicate
+          required: true
+        - label: I would be willing to contribute this feature via a pull request
+          required: false
