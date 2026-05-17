@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react';
-import { useNetworkStore, type TestPhase } from '../store/networkStore';
+import { useNetworkStore } from '../store/networkStore';
 import { useEdgeStore } from '../store/edgeStore';
 import { useEventsStore, detectEvents, resetEventDetection } from '../store/eventsStore';
 import { heartbeatService } from '../services/heartbeatService';
@@ -89,7 +89,11 @@ export function useDiagnostics() {
     }
   }, [edgeStore]);
 
-  // Continuous download/upload loop (Simultaneous).
+  // Continuous throughput loop — sequential phases (download → upload).
+  // Running them simultaneously splits bandwidth on shared pipes,
+  // which is why Ookla also runs them one at a time.
+  // Each phase uses 4 parallel streams internally (multi-connection).
+  // Respects testMode: 'download' | 'upload' | 'both'.
   const runContinuousThroughput = useCallback(async () => {
     while (isRunningRef.current) {
       if (throughputInFlightRef.current) {
@@ -98,34 +102,45 @@ export function useDiagnostics() {
       }
 
       throughputInFlightRef.current = true;
-      setPhase('active' as TestPhase); // Use 'active' or similar instead of alternating
 
       try {
-        const { download: lastDl, upload: lastUl, addDataConsumed } = useNetworkStore.getState();
+        const state = useNetworkStore.getState();
+        const { download: lastDl, upload: lastUl, addDataConsumed, testMode } = state;
+        let totalBytes = 0;
 
-        const dlSize = adaptiveDownloadSize(lastDl) * 2;
-        const ulSize = adaptiveUploadSize(lastUl) * 2;
-
-        const [dlResult, ulResult] = await Promise.all([
-          measureDownload(dlSize, (mbps) => {
+        // ── Download phase (4 parallel streams) ──
+        if (testMode === 'both' || testMode === 'download') {
+          setPhase('download');
+          const dlSize = adaptiveDownloadSize(lastDl);
+          const dlResult = await measureDownload(dlSize, (mbps) => {
             if (isRunningRef.current) setMetrics({ download: mbps });
-          }),
-          measureUpload(ulSize, (mbps) => {
-            if (isRunningRef.current) setMetrics({ upload: mbps });
-          })
-        ]);
-
-        if (isRunningRef.current) {
-          setMetrics({ download: dlResult.mbps, upload: ulResult.mbps });
-          addDataConsumed(dlResult.bytes + ulResult.bytes);
+          });
+          if (!isRunningRef.current) break;
+          setMetrics({ download: dlResult.mbps });
+          totalBytes += dlResult.bytes;
         }
+
+        // ── Upload phase (4 parallel streams) ──
+        if (testMode === 'both' || testMode === 'upload') {
+          setPhase('upload');
+          const ulSize = adaptiveUploadSize(lastUl);
+          const ulResult = await measureUpload(ulSize, (mbps) => {
+            if (isRunningRef.current) setMetrics({ upload: mbps });
+          });
+          if (!isRunningRef.current) break;
+          setMetrics({ upload: ulResult.mbps });
+          totalBytes += ulResult.bytes;
+        }
+
+        addDataConsumed(totalBytes);
+        setPhase('active');
 
       } finally {
         throughputInFlightRef.current = false;
       }
 
-      // Short pause so the heartbeat can measure idle latency between tests.
-      await new Promise(r => setTimeout(r, 500));
+      // Brief pause for latency measurement between cycles
+      await new Promise(r => setTimeout(r, 300));
     }
   }, [setMetrics, setPhase]);
 

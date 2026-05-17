@@ -8,13 +8,14 @@ interface SpeedometerProps {
 }
 
 export function Speedometer({ type }: SpeedometerProps) {
-  const { download, upload, isMonitoring } = useNetworkStore();
+  const { download, upload, isMonitoring, testPhase } = useNetworkStore();
 
   const isDownload = type === 'download';
   const value = isDownload ? download : upload;
   const label = isDownload ? 'Download' : 'Upload';
   const color = isDownload ? '#22d3ee' : '#a78bfa';
   const Icon = isDownload ? ArrowDown : ArrowUp;
+  const isActivePhase = testPhase === type || testPhase === 'active';
 
   // SVG gauge math — 240 degree arc
   const size = 220;
@@ -94,7 +95,7 @@ export function Speedometer({ type }: SpeedometerProps) {
             style={{
               fontSize: '2.75rem',
               lineHeight: 1,
-              color: isMonitoring && value > 0 ? color : 'var(--text-1)',
+              color: isMonitoring && isActivePhase && value > 0 ? color : 'var(--text-1)',
             }}
           />
 

@@ -74,7 +74,7 @@ export default function DashboardPage() {
   const {
     isMonitoring, testPhase, wakeLockActive, sessionStart,
     ping, jitter, packetLoss, stability, dataConsumed,
-    history, analytics,
+    history, analytics, testMode, setTestMode,
   } = useNetworkStore();
   const { startMonitoring, stopMonitoring } = useDiagnostics();
   const { exportCSV, exportTXT, exportJSON } = useExport();
@@ -94,7 +94,11 @@ export default function DashboardPage() {
   const qualityColor = getQualityColor(stability);
   const qualityLabel = getQualityLabel(stability);
 
-  const phaseLabel = idle ? 'Ready' : testPhase === 'ping' ? 'Measuring latency' : 'Testing';
+  const phaseLabel = idle ? 'Ready'
+    : testPhase === 'ping' ? 'Measuring latency'
+    : testPhase === 'download' ? 'Testing download'
+    : testPhase === 'upload' ? 'Testing upload'
+    : 'Monitoring';
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'var(--bg-base)' }}>
@@ -164,6 +168,24 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Test Mode Toggle */}
+            <div className="flex items-center rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
+              {(['download', 'both', 'upload'] as const).map((mode) => (
+                <button
+                  key={mode}
+                  className="text-[11px] font-semibold px-3 py-1.5 transition-colors"
+                  style={{
+                    background: testMode === mode ? 'var(--bg-surface)' : 'transparent',
+                    color: testMode === mode ? 'var(--text-1)' : 'var(--text-3)',
+                  }}
+                  onClick={() => setTestMode(mode)}
+                  disabled={isMonitoring}
+                  title={`Test ${mode === 'both' ? 'both' : mode + ' only'}`}
+                >
+                  {mode === 'download' ? '↓ DL' : mode === 'upload' ? '↑ UL' : 'Both'}
+                </button>
+              ))}
+            </div>
             {/* Start / Stop */}
             <motion.button
               className="btn-primary flex items-center gap-2 px-5 py-2 text-sm font-bold"

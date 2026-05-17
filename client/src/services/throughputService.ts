@@ -1,16 +1,20 @@
 /**
  * throughputService.ts
  *
- * Handles download and upload speed measurements.
- * All requests go to our own Worker (/api/down and /api/up),
- * never to any third-party service.
+ * Multi-connection throughput measurement, similar to how Ookla Speedtest works.
  *
- * The big change from the original:
- * The upload buffer is allocated once when this module loads, not
- * every time you run an upload test. The old approach was allocating
- * fresh megabytes every few seconds, which caused the browser's garbage
- * collector to kick in mid-test and stutter the UI. Now we just reuse
- * the same buffer with a zero-copy slice each time.
+ * Key design decisions:
+ * 1. We use MULTIPLE parallel connections (4 streams) to saturate the pipe.
+ *    A single HTTP connection can't fill a link due to TCP slow-start and
+ *    flow control. Ookla uses 4-8 connections for exactly this reason.
+ *
+ * 2. Each stream downloads/uploads independently and we sum the bytes
+ *    across all streams to calculate total throughput.
+ *
+ * 3. Upload buffer is pre-allocated once (25 MB) to avoid GC pressure.
+ *
+ * 4. Progress callbacks fire every 100ms with the combined throughput
+ *    across all active streams.
  */
 
 import { API } from '../config/api';
@@ -21,133 +25,166 @@ export interface ThroughputResult {
   bytes: number;
 }
 
-// ─── Upload Buffer (allocated once, reused forever) ───────────────────────────
-//
-// Max upload size is 5MB, so we allocate that once up front.
-// We randomize the first 64KB so the payload isn't trivially compressible
-// by any proxy. The rest stays zeroed — fine for throughput testing since
-// we only care about byte count, not data content.
-const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
-const _uploadBuffer = new Uint8Array(MAX_UPLOAD_BYTES);
-crypto.getRandomValues(_uploadBuffer.subarray(0, Math.min(MAX_UPLOAD_BYTES, 65_536)));
+// ─── Config ───────────────────────────────────────────────────────────────────
 
-// ─── Download ─────────────────────────────────────────────────────────────────
+const NUM_STREAMS = 4;   // Number of parallel connections (like Ookla "Multi")
+const MAX_UPLOAD_BYTES = 25 * 1024 * 1024; // 25 MB buffer
+
+// ─── Upload Buffer (allocated once, reused forever) ───────────────────────────
+
+const _uploadBuffer = new Uint8Array(MAX_UPLOAD_BYTES);
+crypto.getRandomValues(_uploadBuffer.subarray(0, 65_536));
+
+// ─── Multi-Stream Download ────────────────────────────────────────────────────
 
 /**
- * Requests a stream of bytes from /api/down and times how fast
- * they arrive. Fires the onProgress callback every ~100ms so the
- * UI can update the speed display in real time.
+ * Opens `NUM_STREAMS` parallel download connections and measures
+ * aggregate throughput across all of them. This saturates the link
+ * much more effectively than a single stream.
  */
 export async function measureDownload(
-  sizeBytes = 512 * 1024,
+  totalBytes = 2 * 1024 * 1024,
   onProgress?: (mbps: number) => void,
 ): Promise<ThroughputResult> {
+  const perStream = Math.ceil(totalBytes / NUM_STREAMS);
   const start = performance.now();
+  const bytesPerStream = new Array(NUM_STREAMS).fill(0);
+  let allDone = false;
+
+  // Progress reporter runs on a timer to avoid flooding the UI
+  const progressInterval = setInterval(() => {
+    if (allDone) return;
+    const now = performance.now();
+    const totalBytesNow = bytesPerStream.reduce((a, b) => a + b, 0);
+    const durationSec = (now - start) / 1000;
+    if (durationSec > 0) {
+      const mbps = (totalBytesNow * 8) / durationSec / 1_000_000;
+      onProgress?.(mbps);
+    }
+  }, 100);
+
   try {
-    const res = await fetch(`${API.down}?bytes=${sizeBytes}&t=${Date.now()}`, {
-      cache: 'no-store',
-      signal: AbortSignal.timeout(15_000),
+    // Launch all streams in parallel
+    const streamPromises = Array.from({ length: NUM_STREAMS }, async (_, i) => {
+      try {
+        const res = await fetch(
+          `${API.down}?bytes=${perStream}&t=${Date.now()}&s=${i}`,
+          { cache: 'no-store', signal: AbortSignal.timeout(20_000) }
+        );
+        if (!res.ok || !res.body) return;
+
+        const reader = res.body.getReader();
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          bytesPerStream[i] += value?.length ?? 0;
+        }
+      } catch {
+        // Individual stream failure is ok — others still count
+      }
     });
 
-    if (!res.ok || !res.body) {
-      throw new Error(`Download endpoint returned ${res.status}`);
-    }
-
-    const reader = res.body.getReader();
-    let totalBytes = 0;
-    let lastCallbackTime = start;
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      totalBytes += value?.length ?? 0;
-
-      const now = performance.now();
-      if (now - lastCallbackTime > 100) {
-        const duration = now - start;
-        const mbps = (totalBytes * 8) / (duration / 1_000) / 1_000_000;
-        onProgress?.(mbps);
-        lastCallbackTime = now;
-      }
-    }
-
-    const durationMs = performance.now() - start;
-    const mbps = (totalBytes * 8) / (durationMs / 1_000) / 1_000_000;
-    return { mbps: Math.max(0, mbps), durationMs, bytes: totalBytes };
-  } catch {
-    return { mbps: 0, durationMs: 0, bytes: 0 };
+    await Promise.all(streamPromises);
+  } finally {
+    allDone = true;
+    clearInterval(progressInterval);
   }
+
+  const durationMs = performance.now() - start;
+  const totalBytesReceived = bytesPerStream.reduce((a, b) => a + b, 0);
+  const mbps = durationMs > 0
+    ? (totalBytesReceived * 8) / (durationMs / 1000) / 1_000_000
+    : 0;
+
+  // One final progress callback with the accurate result
+  onProgress?.(mbps);
+
+  return { mbps: Math.max(0, mbps), durationMs, bytes: totalBytesReceived };
 }
 
-// ─── Upload ───────────────────────────────────────────────────────────────────
+// ─── Multi-Stream Upload ──────────────────────────────────────────────────────
 
 /**
- * Sends a slice of the pre-allocated buffer to /api/up via XHR.
- * We use XHR instead of fetch here because XHR gives us upload
- * progress events, which fetch still doesn't expose properly.
- *
- * The payload is sent as raw binary (application/octet-stream),
- * not as FormData, so there's no multipart encoding overhead
- * inflating the byte count.
+ * Opens `NUM_STREAMS` parallel upload connections.
+ * Each sends a slice of the pre-allocated buffer.
+ * XHR is used for upload progress events.
  */
 export async function measureUpload(
-  sizeBytes = 256 * 1024,
+  totalBytes = 1 * 1024 * 1024,
   onProgress?: (mbps: number) => void,
 ): Promise<ThroughputResult> {
-  // Never go above the pre-allocated buffer size — no new allocations.
-  const actualSize = Math.min(sizeBytes, MAX_UPLOAD_BYTES);
-  const payload = _uploadBuffer.subarray(0, actualSize); // zero-copy view
-  const blob = new Blob([payload], { type: 'application/octet-stream' });
-
+  const perStream = Math.min(
+    Math.ceil(totalBytes / NUM_STREAMS),
+    Math.floor(MAX_UPLOAD_BYTES / NUM_STREAMS)
+  );
   const start = performance.now();
+  const loadedPerStream = new Array(NUM_STREAMS).fill(0);
+  let allDone = false;
 
-  return new Promise((resolve) => {
-    try {
-      const xhr = new XMLHttpRequest();
-      xhr.open('POST', `${API.up}?t=${Date.now()}`, true);
-      xhr.setRequestHeader('Content-Type', 'application/octet-stream');
-      xhr.timeout = 15_000;
-
-      let lastCallbackTime = start;
-
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable) {
-          const now = performance.now();
-          if (now - lastCallbackTime > 100) {
-            const duration = now - start;
-            const mbps = (e.loaded * 8) / (duration / 1_000) / 1_000_000;
-            onProgress?.(mbps);
-            lastCallbackTime = now;
-          }
-        }
-      };
-
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          const durationMs = performance.now() - start;
-          const mbps = (actualSize * 8) / (durationMs / 1_000) / 1_000_000;
-          resolve({ mbps: Math.max(0, mbps), durationMs, bytes: actualSize });
-        } else {
-          resolve({ mbps: 0, durationMs: 0, bytes: 0 });
-        }
-      };
-
-      xhr.onerror   = () => resolve({ mbps: 0, durationMs: 0, bytes: 0 });
-      xhr.ontimeout = () => resolve({ mbps: 0, durationMs: 0, bytes: 0 });
-
-      xhr.send(blob);
-    } catch {
-      resolve({ mbps: 0, durationMs: 0, bytes: 0 });
+  // Progress reporter
+  const progressInterval = setInterval(() => {
+    if (allDone) return;
+    const now = performance.now();
+    const totalLoaded = loadedPerStream.reduce((a, b) => a + b, 0);
+    const durationSec = (now - start) / 1000;
+    if (durationSec > 0) {
+      const mbps = (totalLoaded * 8) / durationSec / 1_000_000;
+      onProgress?.(mbps);
     }
-  });
+  }, 100);
+
+  try {
+    const streamPromises = Array.from({ length: NUM_STREAMS }, (_, i) => {
+      return new Promise<void>((resolve) => {
+        try {
+          const offset = i * perStream;
+          const slice = _uploadBuffer.subarray(offset, offset + perStream);
+          const blob = new Blob([slice], { type: 'application/octet-stream' });
+
+          const xhr = new XMLHttpRequest();
+          xhr.open('POST', `${API.up}?t=${Date.now()}&s=${i}`, true);
+          xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+          xhr.timeout = 20_000;
+
+          xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable) {
+              loadedPerStream[i] = e.loaded;
+            }
+          };
+
+          xhr.onload = () => {
+            loadedPerStream[i] = perStream;
+            resolve();
+          };
+          xhr.onerror = () => resolve();
+          xhr.ontimeout = () => resolve();
+
+          xhr.send(blob);
+        } catch {
+          resolve();
+        }
+      });
+    });
+
+    await Promise.all(streamPromises);
+  } finally {
+    allDone = true;
+    clearInterval(progressInterval);
+  }
+
+  const durationMs = performance.now() - start;
+  const totalSent = loadedPerStream.reduce((a, b) => a + b, 0);
+  const mbps = durationMs > 0
+    ? (totalSent * 8) / (durationMs / 1000) / 1_000_000
+    : 0;
+
+  onProgress?.(mbps);
+
+  return { mbps: Math.max(0, mbps), durationMs, bytes: totalSent };
 }
 
 // ─── One-shot ping ────────────────────────────────────────────────────────────
 
-/**
- * A single HTTP ping — used for quick health checks or the first
- * latency sample before the heartbeat loop takes over.
- */
 export async function httpPing(): Promise<number> {
   try {
     const start = performance.now();
@@ -166,22 +203,21 @@ export async function httpPing(): Promise<number> {
 // ─── Adaptive sizing ──────────────────────────────────────────────────────────
 
 /**
- * Picks a download payload size that should take roughly 1.5 seconds
- * to complete at the current speed. This keeps tests responsive —
- * not too short (inaccurate) and not too long (slow to react to changes).
+ * Targets ~3 seconds of download at the current speed.
+ * Longer tests = more accurate measurements (lets TCP fully ramp up).
+ * Max 25 MB total across all streams.
  */
 export function adaptiveDownloadSize(recentMbps: number): number {
-  if (recentMbps === 0) return 512 * 1024; // cold start: 512KB
-  const bytes = (recentMbps * 1_000_000 * 1.5) / 8;
-  return Math.max(256 * 1024, Math.min(10 * 1024 * 1024, bytes));
+  if (recentMbps === 0) return 2 * 1024 * 1024; // cold start: 2 MB total
+  const bytes = (recentMbps * 1_000_000 * 3) / 8; // 3 seconds target
+  return Math.max(1 * 1024 * 1024, Math.min(25 * 1024 * 1024, bytes));
 }
 
 /**
- * Same idea for upload — targets about 1 second. Capped at MAX_UPLOAD_BYTES
- * so we never need to allocate a bigger buffer than what we have.
+ * Targets ~2.5 seconds of upload.
  */
 export function adaptiveUploadSize(recentMbps: number): number {
-  if (recentMbps === 0) return 256 * 1024; // cold start: 256KB
-  const bytes = (recentMbps * 1_000_000 * 1.0) / 8;
-  return Math.max(128 * 1024, Math.min(MAX_UPLOAD_BYTES, bytes));
+  if (recentMbps === 0) return 1 * 1024 * 1024; // cold start: 1 MB total
+  const bytes = (recentMbps * 1_000_000 * 2.5) / 8;
+  return Math.max(512 * 1024, Math.min(MAX_UPLOAD_BYTES, bytes));
 }
