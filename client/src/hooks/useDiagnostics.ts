@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react';
-import { useNetworkStore } from '../store/networkStore';
+import { useNetworkStore, type TestPhase } from '../store/networkStore';
 import { useEdgeStore } from '../store/edgeStore';
 import { useEventsStore, detectEvents, resetEventDetection } from '../store/eventsStore';
 import { heartbeatService } from '../services/heartbeatService';

@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Play, Square, Maximize2, Download, Moon } from 'lucide-react';
+import { Play, Square, Maximize2, Moon } from 'lucide-react';
 import { useNetworkStore } from '../../store/networkStore';
 import { useEdgeStore } from '../../store/edgeStore';
 import { useDiagnostics } from '../../hooks/useDiagnostics';
