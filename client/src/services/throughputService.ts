@@ -42,8 +42,8 @@ crypto.getRandomValues(_uploadBuffer.subarray(0, 65_536));
  * aggregate throughput across all of them. This saturates the link
  * much more effectively than a single stream.
  *
- * Modified to be duration-bound (default 2000ms) for high accuracy,
- * completely avoiding handshake overhead and feedback loop traps.
+ * Modified to fetch consecutive lightweight 1 MB chunks to prevent
+ * Cloudflare Worker CPU limits (free tier) and memory/CORS bottlenecks.
  */
 export async function measureDownload(
   durationOrSize = 2000,
@@ -73,23 +73,25 @@ export async function measureDownload(
   }, 100);
 
   try {
-    // Launch all streams in parallel requesting max bytes (15 MB per stream) to keep the pipeline saturated
+    // Launch all streams in parallel, consecutively downloading 1 MB chunks as long as test is active
     const streamPromises = Array.from({ length: NUM_STREAMS }, async (_, i) => {
-      try {
-        const res = await fetch(
-          `${API.down}?bytes=${15 * 1024 * 1024}&t=${Date.now()}&s=${i}`,
-          { cache: 'no-store', signal: abortController.signal }
-        );
-        if (!res.ok || !res.body) return;
+      while (!allDone) {
+        try {
+          const res = await fetch(
+            `${API.down}?bytes=${1 * 1024 * 1024}&t=${Date.now()}&s=${i}`,
+            { cache: 'no-store', signal: abortController.signal }
+          );
+          if (!res.ok || !res.body) break;
 
-        const reader = res.body.getReader();
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          bytesPerStream[i] += value?.length ?? 0;
+          const reader = res.body.getReader();
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            bytesPerStream[i] += value?.length ?? 0;
+          }
+        } catch {
+          break; // Abort or connection error stops this stream loop
         }
-      } catch {
-        // Fetch abort is expected and swallowed to save completed bytes
       }
     });
 
@@ -119,7 +121,8 @@ export async function measureDownload(
  * Each sends a slice of the pre-allocated buffer.
  * XHR is used for upload progress events.
  *
- * Modified to be duration-bound (default 2000ms) for high accuracy.
+ * Modified to upload consecutive lightweight 1 MB chunks to prevent
+ * CORS, memory limitations, or Cloudflare Worker timeout/payload errors.
  */
 export async function measureUpload(
   durationOrSize = 2000,
@@ -152,38 +155,47 @@ export async function measureUpload(
 
   try {
     const streamPromises = Array.from({ length: NUM_STREAMS }, (_, i) => {
-      return new Promise<void>((resolve) => {
-        try {
-          // Send 8 MB per stream (Worker's limit)
-          const perStream = 8 * 1024 * 1024;
-          const offset = i * (perStream / 2);
-          const slice = _uploadBuffer.subarray(offset, offset + perStream);
-          const blob = new Blob([slice], { type: 'application/octet-stream' });
+      return new Promise<void>(async (resolve) => {
+        while (!allDone) {
+          try {
+            const perStream = 1 * 1024 * 1024; // 1 MB chunk
+            const offset = (i * perStream) % (MAX_UPLOAD_BYTES - perStream);
+            const slice = _uploadBuffer.subarray(offset, offset + perStream);
+            const blob = new Blob([slice], { type: 'application/octet-stream' });
 
-          const xhr = new XMLHttpRequest();
-          xhrList.push(xhr);
-          xhr.open('POST', `${API.up}?t=${Date.now()}&s=${i}`, true);
-          xhr.setRequestHeader('Content-Type', 'application/octet-stream');
-          xhr.timeout = 20_000;
+            const xhr = new XMLHttpRequest();
+            xhrList.push(xhr);
 
-          xhr.upload.onprogress = (e) => {
-            if (e.lengthComputable) {
-              loadedPerStream[i] = e.loaded;
-            }
-          };
+            const xhrPromise = new Promise<void>((xhrResolve) => {
+              xhr.open('POST', `${API.up}?t=${Date.now()}&s=${i}`, true);
+              xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+              xhr.timeout = 10_000;
 
-          xhr.onload = () => {
-            loadedPerStream[i] = perStream;
-            resolve();
-          };
-          xhr.onerror = () => resolve();
-          xhr.ontimeout = () => resolve();
-          xhr.onabort = () => resolve();
+              let lastLoaded = 0;
+              xhr.upload.onprogress = (e) => {
+                if (e.lengthComputable && !allDone) {
+                  const delta = e.loaded - lastLoaded;
+                  loadedPerStream[i] += delta;
+                  lastLoaded = e.loaded;
+                }
+              };
 
-          xhr.send(blob);
-        } catch {
-          resolve();
+              xhr.onload = () => {
+                xhrResolve();
+              };
+              xhr.onerror = () => xhrResolve();
+              xhr.ontimeout = () => xhrResolve();
+              xhr.onabort = () => xhrResolve();
+
+              xhr.send(blob);
+            });
+
+            await xhrPromise;
+          } catch {
+            break;
+          }
         }
+        resolve();
       });
     });
 
