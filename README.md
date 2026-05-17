@@ -6,6 +6,10 @@
   <img src="https://img.shields.io/github/stars/netpulsedev/netpulse?style=for-the-badge&color=fbbf24" alt="Stars" />
 </p>
 
+<p align="center">
+  <a href="https://www.producthunt.com/products/netpulse-internet-diagnostics-tool?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-netpulse-internet-diagnostics-tool" target="_blank" rel="noopener noreferrer"><img alt="NetPulse – Internet Diagnostics Tool - Like Speedtest, but never stops monitoring your connection | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1148923&theme=dark&t=1779011467925"></a>
+</p>
+
 <h1 align="center">⚡ NetPulse</h1>
 
 <p align="center">
