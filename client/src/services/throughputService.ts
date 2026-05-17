@@ -41,15 +41,24 @@ crypto.getRandomValues(_uploadBuffer.subarray(0, 65_536));
  * Opens `NUM_STREAMS` parallel download connections and measures
  * aggregate throughput across all of them. This saturates the link
  * much more effectively than a single stream.
+ *
+ * Modified to be duration-bound (default 2000ms) for high accuracy,
+ * completely avoiding handshake overhead and feedback loop traps.
  */
 export async function measureDownload(
-  totalBytes = 2 * 1024 * 1024,
+  durationOrSize = 2000,
   onProgress?: (mbps: number) => void,
 ): Promise<ThroughputResult> {
-  const perStream = Math.ceil(totalBytes / NUM_STREAMS);
+  const durationMs = durationOrSize > 100_000 ? 2000 : durationOrSize;
   const start = performance.now();
   const bytesPerStream = new Array(NUM_STREAMS).fill(0);
   let allDone = false;
+  const abortController = new AbortController();
+
+  // Set timeout to abort the fetches after durationMs
+  const timeoutId = setTimeout(() => {
+    abortController.abort();
+  }, durationMs);
 
   // Progress reporter runs on a timer to avoid flooding the UI
   const progressInterval = setInterval(() => {
@@ -64,12 +73,12 @@ export async function measureDownload(
   }, 100);
 
   try {
-    // Launch all streams in parallel
+    // Launch all streams in parallel requesting max bytes (15 MB per stream) to keep the pipeline saturated
     const streamPromises = Array.from({ length: NUM_STREAMS }, async (_, i) => {
       try {
         const res = await fetch(
-          `${API.down}?bytes=${perStream}&t=${Date.now()}&s=${i}`,
-          { cache: 'no-store', signal: AbortSignal.timeout(20_000) }
+          `${API.down}?bytes=${15 * 1024 * 1024}&t=${Date.now()}&s=${i}`,
+          { cache: 'no-store', signal: abortController.signal }
         );
         if (!res.ok || !res.body) return;
 
@@ -80,26 +89,27 @@ export async function measureDownload(
           bytesPerStream[i] += value?.length ?? 0;
         }
       } catch {
-        // Individual stream failure is ok — others still count
+        // Fetch abort is expected and swallowed to save completed bytes
       }
     });
 
     await Promise.all(streamPromises);
   } finally {
     allDone = true;
+    clearTimeout(timeoutId);
     clearInterval(progressInterval);
   }
 
-  const durationMs = performance.now() - start;
+  const durationMsActual = performance.now() - start;
   const totalBytesReceived = bytesPerStream.reduce((a, b) => a + b, 0);
-  const mbps = durationMs > 0
-    ? (totalBytesReceived * 8) / (durationMs / 1000) / 1_000_000
+  const mbps = durationMsActual > 0
+    ? (totalBytesReceived * 8) / (durationMsActual / 1000) / 1_000_000
     : 0;
 
   // One final progress callback with the accurate result
   onProgress?.(mbps);
 
-  return { mbps: Math.max(0, mbps), durationMs, bytes: totalBytesReceived };
+  return { mbps: Math.max(0, mbps), durationMs: durationMsActual, bytes: totalBytesReceived };
 }
 
 // ─── Multi-Stream Upload ──────────────────────────────────────────────────────
@@ -108,18 +118,18 @@ export async function measureDownload(
  * Opens `NUM_STREAMS` parallel upload connections.
  * Each sends a slice of the pre-allocated buffer.
  * XHR is used for upload progress events.
+ *
+ * Modified to be duration-bound (default 2000ms) for high accuracy.
  */
 export async function measureUpload(
-  totalBytes = 1 * 1024 * 1024,
+  durationOrSize = 2000,
   onProgress?: (mbps: number) => void,
 ): Promise<ThroughputResult> {
-  const perStream = Math.min(
-    Math.ceil(totalBytes / NUM_STREAMS),
-    Math.floor(MAX_UPLOAD_BYTES / NUM_STREAMS)
-  );
+  const durationMs = durationOrSize > 100_000 ? 2000 : durationOrSize;
   const start = performance.now();
   const loadedPerStream = new Array(NUM_STREAMS).fill(0);
   let allDone = false;
+  const xhrList: XMLHttpRequest[] = [];
 
   // Progress reporter
   const progressInterval = setInterval(() => {
@@ -133,15 +143,25 @@ export async function measureUpload(
     }
   }, 100);
 
+  // Set timeout to abort the XHR uploads after durationMs
+  const timeoutId = setTimeout(() => {
+    xhrList.forEach(xhr => {
+      try { xhr.abort(); } catch { /* ignore */ }
+    });
+  }, durationMs);
+
   try {
     const streamPromises = Array.from({ length: NUM_STREAMS }, (_, i) => {
       return new Promise<void>((resolve) => {
         try {
-          const offset = i * perStream;
+          // Send 8 MB per stream (Worker's limit)
+          const perStream = 8 * 1024 * 1024;
+          const offset = i * (perStream / 2);
           const slice = _uploadBuffer.subarray(offset, offset + perStream);
           const blob = new Blob([slice], { type: 'application/octet-stream' });
 
           const xhr = new XMLHttpRequest();
+          xhrList.push(xhr);
           xhr.open('POST', `${API.up}?t=${Date.now()}&s=${i}`, true);
           xhr.setRequestHeader('Content-Type', 'application/octet-stream');
           xhr.timeout = 20_000;
@@ -158,6 +178,7 @@ export async function measureUpload(
           };
           xhr.onerror = () => resolve();
           xhr.ontimeout = () => resolve();
+          xhr.onabort = () => resolve();
 
           xhr.send(blob);
         } catch {
@@ -169,18 +190,19 @@ export async function measureUpload(
     await Promise.all(streamPromises);
   } finally {
     allDone = true;
+    clearTimeout(timeoutId);
     clearInterval(progressInterval);
   }
 
-  const durationMs = performance.now() - start;
+  const durationMsActual = performance.now() - start;
   const totalSent = loadedPerStream.reduce((a, b) => a + b, 0);
-  const mbps = durationMs > 0
-    ? (totalSent * 8) / (durationMs / 1000) / 1_000_000
+  const mbps = durationMsActual > 0
+    ? (totalSent * 8) / (durationMsActual / 1000) / 1_000_000
     : 0;
 
   onProgress?.(mbps);
 
-  return { mbps: Math.max(0, mbps), durationMs, bytes: totalSent };
+  return { mbps: Math.max(0, mbps), durationMs: durationMsActual, bytes: totalSent };
 }
 
 // ─── One-shot ping ────────────────────────────────────────────────────────────

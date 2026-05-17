@@ -8,8 +8,6 @@ import { API } from '../config/api';
 import {
   measureDownload,
   measureUpload,
-  adaptiveDownloadSize,
-  adaptiveUploadSize,
 } from '../services/throughputService';
 import {
   calculateStability,
@@ -37,6 +35,7 @@ export function useDiagnostics() {
   const missedHeartbeatsRef = useRef(0);
   const isRunningRef = useRef(false);
   const throughputInFlightRef = useRef(false);
+  const snapshotIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Keep the screen on while monitoring.
   const acquireWakeLock = useCallback(async () => {
@@ -105,14 +104,13 @@ export function useDiagnostics() {
 
       try {
         const state = useNetworkStore.getState();
-        const { download: lastDl, upload: lastUl, addDataConsumed, testMode } = state;
+        const { addDataConsumed, testMode } = state;
         let totalBytes = 0;
 
-        // ── Download phase (4 parallel streams) ──
+        // ── Download phase (4 parallel streams, duration-bound for high accuracy) ──
         if (testMode === 'both' || testMode === 'download') {
           setPhase('download');
-          const dlSize = adaptiveDownloadSize(lastDl);
-          const dlResult = await measureDownload(dlSize, (mbps) => {
+          const dlResult = await measureDownload(2000, (mbps) => {
             if (isRunningRef.current) setMetrics({ download: mbps });
           });
           if (!isRunningRef.current) break;
@@ -120,11 +118,10 @@ export function useDiagnostics() {
           totalBytes += dlResult.bytes;
         }
 
-        // ── Upload phase (4 parallel streams) ──
+        // ── Upload phase (4 parallel streams, duration-bound for high accuracy) ──
         if (testMode === 'both' || testMode === 'upload') {
           setPhase('upload');
-          const ulSize = adaptiveUploadSize(lastUl);
-          const ulResult = await measureUpload(ulSize, (mbps) => {
+          const ulResult = await measureUpload(2000, (mbps) => {
             if (isRunningRef.current) setMetrics({ upload: mbps });
           });
           if (!isRunningRef.current) break;
@@ -219,9 +216,16 @@ export function useDiagnostics() {
 
       missedHeartbeatsRef.current = heartbeatService.getMissedHeartbeats();
       packetLossRef.current = heartbeatService.getPacketLossPercent();
-
-      commitSnapshot();
+      setMetrics({ packetLoss: packetLossRef.current });
     });
+
+    // Start 1Hz (once per second) telemetry snapshotting to avoid history floods and mathematical skew
+    if (snapshotIntervalRef.current) clearInterval(snapshotIntervalRef.current);
+    snapshotIntervalRef.current = setInterval(() => {
+      if (isRunningRef.current) {
+        commitSnapshot();
+      }
+    }, 1000);
 
     heartbeatService.connect();
     runContinuousThroughput().catch(() => {});
@@ -235,6 +239,12 @@ export function useDiagnostics() {
   const stopMonitoring = useCallback(async () => {
     isRunningRef.current = false;
     throughputInFlightRef.current = false;
+
+    // Clear the 1Hz snapshotting interval
+    if (snapshotIntervalRef.current !== null) {
+      clearInterval(snapshotIntervalRef.current);
+      snapshotIntervalRef.current = null;
+    }
 
     heartbeatService.stopHeartbeat();
     heartbeatService.disconnect();

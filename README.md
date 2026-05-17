@@ -12,6 +12,9 @@
 
 <h1 align="center">⚡ NetPulse</h1>
 
+> [!NOTE]
+> **NetPulse is currently in Beta.** We are actively hardening the continuous diagnostics engine and adding features in preparation for our public launch.
+
 <p align="center">
   <strong>Continuous internet diagnostics that run entirely in your browser.</strong><br/>
   Multi-connection speed tests · Real-time latency tracking · Stability scoring · WiFi alignment
