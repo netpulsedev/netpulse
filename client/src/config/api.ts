@@ -13,7 +13,11 @@
  *   VITE_API_BASE=https://netpulse-worker.yourname.workers.dev
  */
 
-const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? '';
+// Use the remote worker directly in production so Cloudflare Pages 
+// doesn't buffer our streaming speed test responses.
+const API_BASE = import.meta.env.DEV 
+  ? '' 
+  : 'https://netpulse-worker-production.sohamd008-cbc.workers.dev';
 
 export const API = {
   ping:   `${API_BASE}/api/ping`,
