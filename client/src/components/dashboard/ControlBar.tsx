@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { Play, Square, Maximize2, Download, Moon } from 'lucide-react';
 import { useNetworkStore } from '../../store/networkStore';
+import { useEdgeStore } from '../../store/edgeStore';
 import { useDiagnostics } from '../../hooks/useDiagnostics';
 import { useElapsedTime, useExport, useFullscreen } from '../../hooks/useUtils';
 import { formatDuration } from '../../utils/stability';
@@ -12,15 +13,14 @@ interface ControlBarProps {
 const PHASE_LABELS: Record<string, string> = {
   idle: 'Idle',
   ping: 'Measuring latency...',
-  download: 'Testing download...',
-  upload: 'Testing upload...',
+  active: 'Testing throughput...',
   analyzing: 'Analyzing...',
 };
 
 export function ControlBar({ onAlignmentMode }: ControlBarProps) {
-  const { isMonitoring, testPhase, wakeLockActive, sessionStart, history } = useNetworkStore();
+  const { isMonitoring, testPhase, wakeLockActive, sessionStart, history, analytics, dataConsumed } = useNetworkStore();
   const { startMonitoring, stopMonitoring } = useDiagnostics();
-  const { exportCSV } = useExport();
+  const { exportCSV, exportTXT, exportJSON } = useExport();
   const { toggle: toggleFullscreen } = useFullscreen();
 
   const duration = useElapsedTime(sessionStart, isMonitoring);
@@ -82,20 +82,44 @@ export function ControlBar({ onAlignmentMode }: ControlBarProps) {
           <span className="hidden md:inline">Alignment</span>
         </motion.button>
 
-        {/* Export CSV */}
-        <motion.button
-          id="btn-export-csv"
-          className="btn-secondary flex items-center gap-2 px-5 py-2.5 text-sm"
-          whileTap={{ scale: 0.96 }}
-          onClick={() => exportCSV(history)}
-          disabled={history.length === 0}
-          style={{ opacity: history.length > 0 ? 1 : 0.4 }}
-          aria-label="Export CSV"
-          title="Export session as CSV"
-        >
-          <Download size={14} />
-          <span className="hidden md:inline">Export</span>
-        </motion.button>
+        {/* Exports */}
+        <div className="flex items-center gap-2">
+          <motion.button
+            id="btn-export-txt"
+            className="btn-secondary flex items-center justify-center w-10 h-10 rounded-xl"
+            whileTap={{ scale: 0.96 }}
+            onClick={() => exportTXT(history, analytics, dataConsumed, useEdgeStore.getState().colo)}
+            disabled={history.length === 0}
+            style={{ opacity: history.length > 0 ? 1 : 0.4 }}
+            title="Export Report (TXT)"
+          >
+            <span className="text-[10px] font-bold">TXT</span>
+          </motion.button>
+          
+          <motion.button
+            id="btn-export-csv"
+            className="btn-secondary flex items-center justify-center w-10 h-10 rounded-xl"
+            whileTap={{ scale: 0.96 }}
+            onClick={() => exportCSV(history)}
+            disabled={history.length === 0}
+            style={{ opacity: history.length > 0 ? 1 : 0.4 }}
+            title="Export Raw Data (CSV)"
+          >
+            <span className="text-[10px] font-bold">CSV</span>
+          </motion.button>
+
+          <motion.button
+            id="btn-export-json"
+            className="btn-secondary flex items-center justify-center w-10 h-10 rounded-xl"
+            whileTap={{ scale: 0.96 }}
+            onClick={() => exportJSON(history, analytics, dataConsumed)}
+            disabled={history.length === 0}
+            style={{ opacity: history.length > 0 ? 1 : 0.4 }}
+            title="Export Data (JSON)"
+          >
+            <span className="text-[10px] font-bold">JSON</span>
+          </motion.button>
+        </div>
 
         {/* Fullscreen */}
         <motion.button

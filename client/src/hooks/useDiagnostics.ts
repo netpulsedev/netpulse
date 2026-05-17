@@ -89,7 +89,7 @@ export function useDiagnostics() {
     }
   }, [edgeStore]);
 
-  // Continuous download/upload loop.
+  // Continuous download/upload loop (Simultaneous).
   const runContinuousThroughput = useCallback(async () => {
     while (isRunningRef.current) {
       if (throughputInFlightRef.current) {
@@ -98,27 +98,27 @@ export function useDiagnostics() {
       }
 
       throughputInFlightRef.current = true;
+      setPhase('active' as TestPhase); // Use 'active' or similar instead of alternating
+
       try {
-        const { download: lastDl, upload: lastUl } = useNetworkStore.getState();
+        const { download: lastDl, upload: lastUl, addDataConsumed } = useNetworkStore.getState();
 
-        setPhase('download');
         const dlSize = adaptiveDownloadSize(lastDl) * 2;
-        const dl = await measureDownload(dlSize, (mbps) => {
-          setMetrics({ download: mbps });
-        });
-
-        if (!isRunningRef.current) break;
-        setMetrics({ download: dl.mbps });
-
-        setPhase('upload');
         const ulSize = adaptiveUploadSize(lastUl) * 2;
-        const ul = await measureUpload(ulSize, (mbps) => {
-          setMetrics({ upload: mbps });
-        });
 
-        if (!isRunningRef.current) break;
-        setMetrics({ upload: ul.mbps });
-        setPhase('analyzing');
+        const [dlResult, ulResult] = await Promise.all([
+          measureDownload(dlSize, (mbps) => {
+            if (isRunningRef.current) setMetrics({ download: mbps });
+          }),
+          measureUpload(ulSize, (mbps) => {
+            if (isRunningRef.current) setMetrics({ upload: mbps });
+          })
+        ]);
+
+        if (isRunningRef.current) {
+          setMetrics({ download: dlResult.mbps, upload: ulResult.mbps });
+          addDataConsumed(dlResult.bytes + ulResult.bytes);
+        }
 
       } finally {
         throughputInFlightRef.current = false;

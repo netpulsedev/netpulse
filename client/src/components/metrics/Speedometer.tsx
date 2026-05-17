@@ -8,10 +8,10 @@ interface SpeedometerProps {
 }
 
 export function Speedometer({ type }: SpeedometerProps) {
-  const { download, upload, testPhase } = useNetworkStore();
+  const { download, upload, isMonitoring } = useNetworkStore();
 
   const isUpload = type === 'upload';
-  const isActive = testPhase === type;
+  const isActive = isMonitoring;
   const currentValue = isUpload ? upload : download;
   
   // Custom colors for each dial

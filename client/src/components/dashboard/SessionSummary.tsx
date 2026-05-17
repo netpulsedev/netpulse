@@ -34,7 +34,7 @@ function StatBlock({ label, value, unit, icon, color }: {
 }
 
 export function SessionSummary() {
-  const { analytics, sessionStart, isMonitoring } = useNetworkStore();
+  const { analytics, sessionStart, isMonitoring, dataConsumed } = useNetworkStore();
   const duration = useElapsedTime(sessionStart, isMonitoring);
   const avgStability = isFinite(analytics.avgStability) ? Math.round(analytics.avgStability) : 0;
   const qualityColor = getQualityColor(avgStability);
@@ -99,6 +99,13 @@ export function SessionSummary() {
           value={analytics.sampleCount > 0 ? getQualityLabel(avgStability) : '—'}
           icon={<Clock size={14} />}
           color={qualityColor}
+        />
+        <StatBlock
+          label="Data Consumed"
+          value={analytics.sampleCount > 0 ? (dataConsumed / 1024 / 1024).toFixed(1) : '—'}
+          unit={analytics.sampleCount > 0 ? 'MB' : ''}
+          icon={<TrendingUp size={14} />}
+          color="#00E5FF"
         />
       </div>
     </motion.div>

@@ -12,7 +12,7 @@ export interface MetricSnapshot {
 }
 
 export type ConnectionQuality = 'excellent' | 'good' | 'fair' | 'poor' | 'idle';
-export type TestPhase = 'idle' | 'ping' | 'download' | 'upload' | 'analyzing';
+export type TestPhase = 'idle' | 'ping' | 'download' | 'upload' | 'analyzing' | 'active';
 
 interface NetworkState {
   // Live metrics
@@ -35,6 +35,7 @@ interface NetworkState {
   sessionId: string | null;
   sessionStart: number | null;
   wakeLockActive: boolean;
+  dataConsumed: number;
 
   // Rolling history (60s at 1Hz)
   history: MetricSnapshot[];
@@ -59,6 +60,7 @@ interface NetworkState {
   setMonitoring: (v: boolean) => void;
   setSessionId: (id: string | null) => void;
   setWakeLock: (v: boolean) => void;
+  addDataConsumed: (bytes: number) => void;
   setNetworkInfo: (info: { effectiveType?: string; downlink?: number; rtt?: number }) => void;
   addPingSample: (ping: number) => void;
   pushHistory: (snap: MetricSnapshot) => void;
@@ -93,6 +95,7 @@ export const useNetworkStore = create<NetworkState>()(
     sessionId: null,
     sessionStart: null,
     wakeLockActive: false,
+    dataConsumed: 0,
     history: [],
     pingHistory: [],
     analytics: { ...defaultAnalytics },
@@ -112,6 +115,8 @@ export const useNetworkStore = create<NetworkState>()(
     setSessionId: (id) => set({ sessionId: id }),
 
     setWakeLock: (v) => set({ wakeLockActive: v }),
+    
+    addDataConsumed: (bytes) => set((state) => ({ dataConsumed: state.dataConsumed + bytes })),
 
     setNetworkInfo: (info) =>
       set((state) => ({
@@ -159,6 +164,8 @@ export const useNetworkStore = create<NetworkState>()(
         sessionStart: null,
         sessionId: null,
         testPhase: 'idle',
+        dataConsumed: 0,
       }),
   }))
 );
+
