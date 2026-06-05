@@ -34,7 +34,7 @@ NetPulse is an **open-source, browser-based network diagnostics tool** — like 
 
 Unlike one-shot speed tests, NetPulse **monitors your connection over time**, detecting latency spikes, throughput drops, jitter instability, and packet loss in real time. It runs entirely client-side (no login, no tracking, no data collection) with measurements routed through your own Cloudflare Worker.
 
-## ⚡ Quick Start
+## ⚡ Quick Start Guide
 
 ```bash
 # Clone the repo
