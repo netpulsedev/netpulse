@@ -155,49 +155,53 @@ export async function measureUpload(
 
   try {
     const streamPromises = Array.from({ length: NUM_STREAMS }, (_, i) => {
-      return new Promise<void>(async (resolve) => {
-        while (!allDone) {
-          try {
-            const perStream = 1 * 1024 * 1024; // 1 MB chunk
-            const offset = (i * perStream) % (MAX_UPLOAD_BYTES - perStream);
-            const slice = _uploadBuffer.subarray(offset, offset + perStream);
-            const blob = new Blob([slice], { type: 'application/octet-stream' });
+  return new Promise<void>((resolve) => {
+    void (async () => {
+      while (!allDone) {
+        try {
+          const perStream = 1 * 1024 * 1024;
+          const offset = (i * perStream) % (MAX_UPLOAD_BYTES - perStream);
+          const slice = _uploadBuffer.subarray(offset, offset + perStream);
+          const blob = new Blob([slice], {
+            type: 'application/octet-stream',
+          });
 
-            const xhr = new XMLHttpRequest();
-            xhrList.push(xhr);
+          const xhr = new XMLHttpRequest();
+          xhrList.push(xhr);
 
-            const xhrPromise = new Promise<void>((xhrResolve) => {
-              xhr.open('POST', `${API.up}?t=${Date.now()}&s=${i}`, true);
-              xhr.setRequestHeader('Content-Type', 'application/octet-stream');
-              xhr.timeout = 10_000;
+          const xhrPromise = new Promise<void>((xhrResolve) => {
+            xhr.open('POST', `${API.up}?t=${Date.now()}&s=${i}`, true);
+            xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+            xhr.timeout = 10_000;
 
-              let lastLoaded = 0;
-              xhr.upload.onprogress = (e) => {
-                if (e.lengthComputable && !allDone) {
-                  const delta = e.loaded - lastLoaded;
-                  loadedPerStream[i] += delta;
-                  lastLoaded = e.loaded;
-                }
-              };
+            let lastLoaded = 0;
 
-              xhr.onload = () => {
-                xhrResolve();
-              };
-              xhr.onerror = () => xhrResolve();
-              xhr.ontimeout = () => xhrResolve();
-              xhr.onabort = () => xhrResolve();
+            xhr.upload.onprogress = (e) => {
+              if (e.lengthComputable && !allDone) {
+                const delta = e.loaded - lastLoaded;
+                loadedPerStream[i] += delta;
+                lastLoaded = e.loaded;
+              }
+            };
 
-              xhr.send(blob);
-            });
+            xhr.onload = () => xhrResolve();
+            xhr.onerror = () => xhrResolve();
+            xhr.ontimeout = () => xhrResolve();
+            xhr.onabort = () => xhrResolve();
 
-            await xhrPromise;
-          } catch {
-            break;
-          }
+            xhr.send(blob);
+          });
+
+          await xhrPromise;
+        } catch {
+          break;
         }
-        resolve();
-      });
-    });
+      }
+
+      resolve();
+    })();
+  });
+});
 
     await Promise.all(streamPromises);
   } finally {
