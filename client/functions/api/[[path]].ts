@@ -15,12 +15,12 @@ interface Env {
 export const onRequest: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
 
-  // Fallback if the service binding is missing in Pages settings
   if (!env.NETPULSE_API) {
     return new Response(
       JSON.stringify({
         ok: false,
-        error: "NETPULSE_API service binding is missing in your Cloudflare Pages Settings. Please add it to route /api/* requests to your Worker.",
+        error:
+          "NETPULSE_API service binding is missing in your Cloudflare Pages Settings. Please add it to route /api/* requests to your Worker.",
       }),
       {
         status: 500,
@@ -33,14 +33,14 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   }
 
   try {
-    // Forward the request directly to the bound Worker service
     return await env.NETPULSE_API.fetch(request.clone());
-  } catch (err: any) {
+  } catch (err) {
+    console.error("NETPULSE_API routing error:", err);
+
     return new Response(
       JSON.stringify({
         ok: false,
-        error: "Failed to route request to NETPULSE_API service binding.",
-        details: err?.message || String(err),
+        error: "Upstream service unavailable.",
       }),
       {
         status: 502,
